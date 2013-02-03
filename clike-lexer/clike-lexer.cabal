@@ -1,0 +1,30 @@
+Name:                clike-lexer
+Version:             0.1.0.0
+Copyright:           Utrecht University, Department of Information and Computing Sciences, Software Technology group
+Description:         C like language tools, a lexer
+Synopsis:            C like language tools, a lexer
+Homepage:            https://github.com/atzedijkstra/clike
+Bug-Reports:         https://github.com/atzedijkstra/clike/issues
+License:             BSD3
+License-file:        ""
+Author:              atze@uu.nl
+Maintainer:          atze@uu.nl
+Category:            Development
+Build-Type:          Simple
+Cabal-Version:       >= 1.8
+Extra-Source-Files:  
+
+Source-Repository head
+  Type:              git
+  Location:          git://github.com/atzedijkstra/clike.git
+
+Library
+  Hs-Source-Dirs:    src
+  Extensions:        
+  Exposed-Modules:   
+  Other-Modules:     
+  Build-Depends:     base >= 4 && < 5,
+                     containers >= 0.4,
+                     filepath >= 1.2,
+                     alex >= 3
+
