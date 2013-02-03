@@ -12,7 +12,7 @@ Maintainer:          atze@uu.nl
 Category:            Development
 Build-Type:          Simple
 Cabal-Version:       >= 1.8
-Extra-Source-Files:  
+Extra-Source-Files:  Language/CLike/Lexer.x
 
 Source-Repository head
   Type:              git
@@ -21,10 +21,16 @@ Source-Repository head
 Library
   Hs-Source-Dirs:    src
   Extensions:        
-  Exposed-Modules:   
+  Exposed-Modules:   Language.CLike.Lexer
   Other-Modules:     
   Build-Depends:     base >= 4 && < 5,
                      containers >= 0.4,
-                     filepath >= 1.2,
-                     alex >= 3
+                     array >= 0.4,
+                     bytestring >= 0.9,
+                     filepath >= 1.2
 
+Executable test1
+  Hs-Source-Dirs:    test
+  Main-Is:           Test1.hs
+  Build-Depends:     base >= 4 && < 5,
+                     clike-lexer >= 0.1.0.0
