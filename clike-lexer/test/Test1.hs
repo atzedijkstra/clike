@@ -11,9 +11,9 @@ main = do
   unless (null args) (do
       h <- openFile (head args) ReadMode
       s <- hGetContents h
-      case scanner ( scfgAddOpts [ScOpt_CommentAs1Token] $
+      case scanner ( -- scfgAddOpts [ScOpt_CommentAs1Token] $
                      scannerConfigCXX
-                   ) s of
+                   ) 0 s of
         Left m -> putStrLn m
         Right t -> forM_ t (putStrLn . show)
     )

@@ -36,7 +36,7 @@ $printable_no_nl = $printable # \n
 $ascdigit  = 0-9
 -- $unidigit  = \x01 -- Trick Alex into handling Unicode. See alexGetChar.
 $digit     = [$ascdigit] -- $unidigit]
-$octit	   = 0-7
+$octit     = 0-7
 $hexit     = [$digit A-F a-f]
 
 -- $unilarge  = \x03 -- Trick Alex into handling Unicode. See alexGetChar.
@@ -50,6 +50,23 @@ $small     = [$ascsmall \_] -- $unismall]
 $namebegin = [$large $small \. \$ \@]
 $namechar  = [$namebegin $digit]
 
+-- header char
+$h_char     = $printable_no_nl # [$whitechar >]
+$q_char     = $printable_no_nl # [$whitechar "]
+
+-- number literal
+$octal_digit			= $octit
+@octal_literal			= 0 $octal_digit+
+$decimal_digit			= $ascdigit
+@decimal_literal		= $decimal_digit+
+$hexadecimal_digit		= $hexit
+@hexadecimal_literal 	= (0x | 0X) $hexadecimal_digit+
+$unsigned_suffix		= [uU]
+$long_suffix			= [lL]
+@long_long_suffix		= ll | LL
+@integer_suffix			= $unsigned_suffix $long_suffix? | $unsigned_suffix @long_long_suffix? | $long_suffix $unsigned_suffix? | @long_long_suffix $unsigned_suffix?
+@integer_literal		= (@octal_literal | @decimal_literal | @hexadecimal_literal) @integer_suffix?
+
 @decimal     = $digit+
 @octal       = $octit+
 @hexadecimal = $hexit+
@@ -60,109 +77,148 @@ $namechar  = [$namebegin $digit]
 @escape      = \\ ([abfnrt\\\'\"\?] | x $hexit{1,2} | $octit{1,3})
 @strchar     = ($printable # [\"\\]) | @escape
 
+-- header name
+@header_name    = \< $h_char+ \> | \" $q_char+ \"
+
 clike :-
 
 -- comment
-"//" [$printable_no_nl]* / {ifScannerOpt ScOpt_CommentAs1Token} {rs C_Comment}
-"//" [$printable_no_nl]* ;
+"//" [$printable_no_nl]* \n / {ifScannerOpt ScOpt_CommentAs1Token} {tkStr C_Comment}
+"//" [$printable_no_nl]* \n ;
+
+-- preprocessor
+<0> {
+	^ \#     	{cxPush cx_hash `andAction` tk C_hash}
+}
+
+<cx_hash> {
+    define      {tk C_hash_define}
+    elif        {tk C_hash_elif}
+    else        {tk C_hash_else}
+    endif       {tk C_hash_endif}
+    error       {tk C_hash_error}
+    if          {tk C_hash_if}
+    ifdef       {tk C_hash_ifdef}
+    ifndef      {tk C_hash_ifndef}
+    include     {cxSet cx_hash_include `andAction` tk C_hash_include}
+    pragma      {tk C_hash_pragma}
+    undef       {tk C_hash_undef}
+}
+
+<cx_hash_include> {
+    @header_name    {tkStr C_String}
+}
+
+<cx_hash,cx_hash_include> {
+    \\ $        ;
+    \n          {cxPop `andAction` tk C_hash_EOL}
+}
+
+-- literals
+@integer_literal	{tkStr C_Int}
 
 -- keywords
 <0> {
-	alignas 			/ {ifLangs langsCXX}		{rt C_alignas }
-	alignof 			/ {ifLangs langsCXX}		{rt C_alignof }
-	and					/ {ifLangs langsCXX}		{rt C_and}
-	and_eq				/ {ifLangs langsCXX}		{rt C_and_eq}
-	asm					/ {ifLangs langsCXX}		{rt C_asm}
-	auto											{rt C_auto}
-	bitand				/ {ifLangs langsCXX}		{rt C_bitand}
-	bitor				/ {ifLangs langsCXX}		{rt C_bitor}
-	bool				/ {ifLangs langsCXX}		{rt C_bool}
-	break											{rt C_break}
-	case											{rt C_case}
-	catch				/ {ifLangs langsCXX}		{rt C_catch}
-	char											{rt C_char}
-	char16_t			/ {ifLangs langsCXX}		{rt C_char16_t}
-	char32_t			/ {ifLangs langsCXX}		{rt C_char32_t}
-	class				/ {ifLangs langsCXX}		{rt C_class}
-	compl				/ {ifLangs langsCXX}		{rt C_compl}
-	const											{rt C_const}
-	const_cast			/ {ifLangs langsCXX}		{rt C_const_cast}
-	constexpr			/ {ifLangs langsCXX}		{rt C_constexpr}
-	continue										{rt C_continue}
-	decltype			/ {ifLangs langsCXX}		{rt C_decltype}
-	default											{rt C_default}
-	delete				/ {ifLangs langsCXX}		{rt C_delete}
-	do												{rt C_do}
-	double											{rt C_double}
-	dynamic_cast		/ {ifLangs langsCXX}		{rt C_dynamic_cast}
-	else											{rt C_else}
-	enum											{rt C_enum}
-	explicit			/ {ifLangs langsCXX}		{rt C_explicit}
-	export				/ {ifLangs langsCXX}		{rt C_export}
-	extern											{rt C_extern}
-	false				/ {ifLangs langsCXX}		{rt C_false}
-	float											{rt C_float}
-	for												{rt C_for}
-	friend				/ {ifLangs langsCXX}		{rt C_friend}
-	goto											{rt C_goto}
-	if												{rt C_if}
-	inline											{rt C_inline}
-	int												{rt C_int}
-	long											{rt C_long}
-	mutable				/ {ifLangs langsCXX}		{rt C_mutable}
-	namespace			/ {ifLangs langsCXX}		{rt C_namespace}
-	new					/ {ifLangs langsCXX}		{rt C_new}
-	noexcept			/ {ifLangs langsCXX}		{rt C_noexcept}
-	not					/ {ifLangs langsCXX}		{rt C_not}
-	not_eq				/ {ifLangs langsCXX}		{rt C_not_eq}
-	nullptr 			/ {ifLangs langsCXX}		{rt C_nullptr }
-	operator			/ {ifLangs langsCXX}		{rt C_operator}
-	or					/ {ifLangs langsCXX}		{rt C_or}
-	or_eq				/ {ifLangs langsCXX}		{rt C_or_eq}
-	private				/ {ifLangs langsCXX}		{rt C_private}
-	protected			/ {ifLangs langsCXX}		{rt C_protected}
-	public				/ {ifLangs langsCXX}		{rt C_public}
-	register										{rt C_register}
-	reinterpret_cast	/ {ifLangs langsCXX}		{rt C_reinterpret_cast}
-	restrict										{rt C_restrict}
-	return											{rt C_return}
-	short											{rt C_short}
-	signed											{rt C_signed}
-	sizeof											{rt C_sizeof}
-	static											{rt C_static}
-	static_assert		/ {ifLangs langsCXX}		{rt C_static_assert}
-	static_cast			/ {ifLangs langsCXX}		{rt C_static_cast}
-	struct											{rt C_struct}
-	switch											{rt C_switch}
-	template			/ {ifLangs langsCXX}		{rt C_template}
-	this				/ {ifLangs langsCXX}		{rt C_this}
-	thread_local		/ {ifLangs langsCXX}		{rt C_thread_local}
-	throw				/ {ifLangs langsCXX}		{rt C_throw}
-	true				/ {ifLangs langsCXX}		{rt C_true}
-	try					/ {ifLangs langsCXX}		{rt C_try}
-	typedef											{rt C_typedef}
-	typeid				/ {ifLangs langsCXX}		{rt C_typeid}
-	typename			/ {ifLangs langsCXX}		{rt C_typename}
-	union											{rt C_union}
-	unsigned										{rt C_unsigned}
-	using				/ {ifLangs langsCXX}		{rt C_using}
-	virtual				/ {ifLangs langsCXX}		{rt C_virtual}
-	void											{rt C_void}
-	volatile										{rt C_volatile}
-	wchar_t				/ {ifLangs langsCXX}		{rt C_wchar_t}
-	while											{rt C_while}
-	xor					/ {ifLangs langsCXX}		{rt C_xor}
-	xor_eq				/ {ifLangs langsCXX}		{rt C_xor_eq}
+    alignas             / {ifLangs langsCXX}        {tk C_alignas }
+    alignof             / {ifLangs langsCXX}        {tk C_alignof }
+    and                 / {ifLangs langsCXX}        {tk C_and}
+    and_eq              / {ifLangs langsCXX}        {tk C_and_eq}
+    asm                 / {ifLangs langsCXX}        {tk C_asm}
+    auto                                            {tk C_auto}
+    bitand              / {ifLangs langsCXX}        {tk C_bitand}
+    bitor               / {ifLangs langsCXX}        {tk C_bitor}
+    bool                / {ifLangs langsCXX}        {tk C_bool}
+    break                                           {tk C_break}
+    case                                            {tk C_case}
+    catch               / {ifLangs langsCXX}        {tk C_catch}
+    char                                            {tk C_char}
+    char16_t            / {ifLangs langsCXX}        {tk C_char16_t}
+    char32_t            / {ifLangs langsCXX}        {tk C_char32_t}
+    class               / {ifLangs langsCXX}        {tk C_class}
+    compl               / {ifLangs langsCXX}        {tk C_compl}
+    const                                           {tk C_const}
+    const_cast          / {ifLangs langsCXX}        {tk C_const_cast}
+    constexpr           / {ifLangs langsCXX}        {tk C_constexpr}
+    continue                                        {tk C_continue}
+    decltype            / {ifLangs langsCXX}        {tk C_decltype}
+    default                                         {tk C_default}
+    delete              / {ifLangs langsCXX}        {tk C_delete}
+    do                                              {tk C_do}
+    double                                          {tk C_double}
+    dynamic_cast        / {ifLangs langsCXX}        {tk C_dynamic_cast}
+    else                                            {tk C_else}
+    enum                                            {tk C_enum}
+    explicit            / {ifLangs langsCXX}        {tk C_explicit}
+    export              / {ifLangs langsCXX}        {tk C_export}
+    extern                                          {tk C_extern}
+    false               / {ifLangs langsCXX}        {tk C_false}
+    float                                           {tk C_float}
+    for                                             {tk C_for}
+    friend              / {ifLangs langsCXX}        {tk C_friend}
+    goto                                            {tk C_goto}
+    if                                              {tk C_if}
+    inline                                          {tk C_inline}
+    int                                             {tk C_int}
+    long                                            {tk C_long}
+    mutable             / {ifLangs langsCXX}        {tk C_mutable}
+    namespace           / {ifLangs langsCXX}        {tk C_namespace}
+    new                 / {ifLangs langsCXX}        {tk C_new}
+    noexcept            / {ifLangs langsCXX}        {tk C_noexcept}
+    not                 / {ifLangs langsCXX}        {tk C_not}
+    not_eq              / {ifLangs langsCXX}        {tk C_not_eq}
+    nullptr             / {ifLangs langsCXX}        {tk C_nullptr }
+    operator            / {ifLangs langsCXX}        {tk C_operator}
+    or                  / {ifLangs langsCXX}        {tk C_or}
+    or_eq               / {ifLangs langsCXX}        {tk C_or_eq}
+    private             / {ifLangs langsCXX}        {tk C_private}
+    protected           / {ifLangs langsCXX}        {tk C_protected}
+    public              / {ifLangs langsCXX}        {tk C_public}
+    register                                        {tk C_register}
+    reinterpret_cast    / {ifLangs langsCXX}        {tk C_reinterpret_cast}
+    restrict                                        {tk C_restrict}
+    return                                          {tk C_return}
+    short                                           {tk C_short}
+    signed                                          {tk C_signed}
+    sizeof                                          {tk C_sizeof}
+    static                                          {tk C_static}
+    static_assert       / {ifLangs langsCXX}        {tk C_static_assert}
+    static_cast         / {ifLangs langsCXX}        {tk C_static_cast}
+    struct                                          {tk C_struct}
+    switch                                          {tk C_switch}
+    template            / {ifLangs langsCXX}        {tk C_template}
+    this                / {ifLangs langsCXX}        {tk C_this}
+    thread_local        / {ifLangs langsCXX}        {tk C_thread_local}
+    throw               / {ifLangs langsCXX}        {tk C_throw}
+    true                / {ifLangs langsCXX}        {tk C_true}
+    try                 / {ifLangs langsCXX}        {tk C_try}
+    typedef                                         {tk C_typedef}
+    typeid              / {ifLangs langsCXX}        {tk C_typeid}
+    typename            / {ifLangs langsCXX}        {tk C_typename}
+    union                                           {tk C_union}
+    unsigned                                        {tk C_unsigned}
+    using               / {ifLangs langsCXX}        {tk C_using}
+    virtual             / {ifLangs langsCXX}        {tk C_virtual}
+    void                                            {tk C_void}
+    volatile                                        {tk C_volatile}
+    wchar_t             / {ifLangs langsCXX}        {tk C_wchar_t}
+    while                                           {tk C_while}
+    xor                 / {ifLangs langsCXX}        {tk C_xor}
+    xor_eq              / {ifLangs langsCXX}        {tk C_xor_eq}
 }
 
-$whitechar+ ;
+$white_no_nl+ ;
 
-$digit+ { rs (Int . read) }
-[\=\+\-\*\/\(\)] { rs (Sym . head) }
-$alpha [$alpha $digit \_ \']* { rs Var }
+-- $digit+ { tkStr (Int . read) }
+[\=\+\-\*\/\(\)] { tkStr (Sym . head) }
+$alpha [$alpha $digit \_ \']* { tkStr C_Name }
+
+-- default newline handling
+<0> {
+	\n ;
+}
 
 -- fallback, unrecognizable
--- $printable_no_nl+ {rs C_Unknown}
+-- $printable_no_nl+ {tkStr C_Unknown}
 
 
 {
@@ -174,8 +230,6 @@ data TokenKind =
     Sym Char
   | Var String
   | Int Integer
-
-  -- Preprocessor
 
   -- Reserved keywords shared by all clike variants: C, C++
   | C_auto
@@ -267,33 +321,53 @@ data TokenKind =
   | C_xor_eq
 
   -- Ident
-  | C_Name	   	String
+  | C_Name      String
   
   -- Literal
-  | C_String	String
-  | C_Int	   	Integer
+  | C_String    String
+  | C_Int       String
   | C_Float     Rational
   
   -- Comment
-  | C_Comment	String		-- comment including delimiter(s)
+  | C_Comment   String      -- comment including delimiter(s)
+  
+  -- Preprocessor
+  | C_hash
+  | C_hash_define
+  | C_hash_elif
+  | C_hash_else
+  | C_hash_endif
+  | C_hash_error
+  | C_hash_if
+  | C_hash_ifdef
+  | C_hash_ifndef
+  | C_hash_include
+  | C_hash_pragma
+  | C_hash_undef
+  | C_hash_EOL
   
   -- Meta
   | C_EOF
-  | C_Unknown	String		-- unrecognizable
+  | C_Unknown   String      -- unrecognizable
   deriving (Eq,Show)
 
 ------------------------------------------------------------------------------------------------
--- Token position
+-- Position utils
 ------------------------------------------------------------------------------------------------
 
 alexNoPos :: AlexPosn
 alexNoPos = AlexPn (-1) (-1) (-1)
 
+alexPosEqual :: AlexPosn -> AlexPosn -> Bool
+alexPosEqual (AlexPn p1 _ _) (AlexPn p2 _ _) = p1 == p2
+
 ------------------------------------------------------------------------------------------------
 -- The token type:
 ------------------------------------------------------------------------------------------------
 
-data Token = Token AlexPosn TokenKind (Maybe String)
+data Token
+  = Token Int		-- ^ context/state
+          AlexPosn TokenKind (Maybe String)
   deriving (Eq,Show)
 
 ------------------------------------------------------------------------------------------------
@@ -301,53 +375,92 @@ data Token = Token AlexPosn TokenKind (Maybe String)
 ------------------------------------------------------------------------------------------------
 
 alexEOF :: Alex Token
-alexEOF = return (Token alexNoPos C_EOF Nothing)
+alexEOF = do
+  c <- alexGetStartCode
+  return (Token c alexNoPos C_EOF Nothing)
 
 ------------------------------------------------------------------------------------------------
--- Result combinators
+-- Result combinators, token actions
 ------------------------------------------------------------------------------------------------
 
-rt :: TokenKind -> AlexAction Token
-rt t (p, _, _, _) _ = return (Token p t Nothing)
+tk :: TokenKind -> AlexAction Token
+tk t (p, _, _, _) _ = do
+  c <- alexGetStartCode
+  return (Token c p t Nothing)
 
-rs :: (String -> TokenKind) -> AlexAction Token
-rs t (p, _, _, input) len = return (Token p (t s) (Just s))
-  where s = take len input
+tkStr :: (String -> TokenKind) -> AlexAction Token
+tkStr t (p, _, _, input) len = do
+  c <- alexGetStartCode
+  return (Token c p (t s) (Just s))
+ where s = take len input
+
+{-
+-- ignore this token
+tkSkip :: AlexAction Token
+tkSkip input len = alexMonadScanUser
+-}
+
+-- ignore this token, but set the start code to a new value
+cxSet :: Int -> AlexAction ()
+cxSet code input len = do alexSetStartCode code -- ; alexMonadScanUser
+
+cxPush :: Int -> AlexAction ()
+cxPush code input len = do alexPushStartCode code -- ; alexMonadScanUser
+
+cxPop :: AlexAction ()
+cxPop input len = do alexPopStartCode -- ; alexMonadScanUser
+
+-- sequence two actions
+andAction :: AlexAction a -> AlexAction b -> AlexAction b
+(a1 `andAction` a2) input len = do a1 input len; a2 input len
+
+-- perform an action for this token, and set the start code to a new value
+andCxPush :: AlexAction result -> Int -> AlexAction result
+action `andCxPush` code = cxPush code `andAction` action
+-- (action `andCxPush` code) input len = do alexPushStartCode code; action input len
+
+
+------------------------------------------------------------------------------------------------
+-- AlexInput utils
+------------------------------------------------------------------------------------------------
+
+alexInputEqual :: AlexInput -> AlexInput -> Bool
+alexInputEqual (p1,_,_,_) (p2,_,_,_) = p1 `alexPosEqual` p2
 
 ------------------------------------------------------------------------------------------------
 -- User level onfiguration
 ------------------------------------------------------------------------------------------------
 
 data ScannerLanguage
-  = ScLang_C				-- C
-  | ScLang_CXX				-- C++
-  | ScLang_CLike			-- Intersection of them all
+  = ScLang_C                -- C
+  | ScLang_CXX              -- C++
+  | ScLang_CLike            -- Intersection of them all
   deriving (Eq,Enum,Bounded)
 
 data ScannerOpt
-  = ScOpt_Preprocessing		-- do CPP preprocessing
-  | ScOpt_CommentAs1Token	-- pass comment through as single token
+  = ScOpt_Preprocessing     -- do CPP preprocessing
+  | ScOpt_CommentAs1Token   -- pass comment through as single token
   deriving (Enum,Bounded)
 
 data ScannerConfig = ScannerConfig
-  { scfgLanguage		:: ScannerLanguage
-  , scfgOpts			:: [ScannerOpt]
+  { scfgLanguage        :: ScannerLanguage
+  , scfgOpts            :: [ScannerOpt]
   }
 
 initScannerConfig :: ScannerConfig
 initScannerConfig = ScannerConfig
-  {	scfgLanguage		= ScLang_CLike
-  , scfgOpts			= []
+  { scfgLanguage        = ScLang_CLike
+  , scfgOpts            = []
   }
 
 scannerConfigCXX, scannerConfigC :: ScannerConfig
 
 scannerConfigCXX = initScannerConfig
-  { scfgLanguage		= ScLang_CXX
+  { scfgLanguage        = ScLang_CXX
   }
 
 scannerConfigC = initScannerConfig
-  { scfgLanguage		= ScLang_C
+  { scfgLanguage        = ScLang_C
   }
 
 scfgAddOpts :: [ScannerOpt] -> ScannerConfig -> ScannerConfig
@@ -360,20 +473,22 @@ scfgAddOpts o c = c {scfgOpts = o ++ scfgOpts c}
 type Bitmap = Int
 
 data AlexUserState = AlexUserState
-  { ausOptsBitmap		:: !Bitmap
-  , ausLangBitmap		:: !Bitmap
-  , ausConfig			:: ScannerConfig
-  , ausStartCodeStack	:: [Int]
-  , ausNonLexedStrings	:: [(AlexPosn,String)]		-- non recognized parts, all in reverse order
+  { ausOptsBitmap       :: !Bitmap
+  , ausLangBitmap       :: !Bitmap
+  , ausConfig           :: ScannerConfig
+  , ausStartCodeStack   :: [Int]
+  , ausErrorAccum       :: Maybe (AlexPosn,String)  -- accumulation of error input, finally leading to additional error token
+  , ausNonLexedStrings  :: [(AlexPosn,String)]      -- non recognized parts, all in reverse order
   }
 
 alexInitUserState :: AlexUserState
 alexInitUserState = AlexUserState
-  { ausOptsBitmap		= 0
-  , ausLangBitmap		= 0
-  , ausConfig 			= initScannerConfig
-  , ausStartCodeStack	= []
-  , ausNonLexedStrings	= []
+  { ausOptsBitmap       = 0
+  , ausLangBitmap       = 0
+  , ausConfig           = initScannerConfig
+  , ausStartCodeStack   = []
+  , ausErrorAccum       = Nothing
+  , ausNonLexedStrings  = []
   }
 
 -- User state access
@@ -403,11 +518,30 @@ alexPushStartCode newc = do
   ausModify $ \us -> us {ausStartCodeStack = c : ausStartCodeStack us}
   alexSetStartCode newc
 
+-- | pop start code, when empty stack ignore and leave start code untouched
 alexPopStartCode :: Alex ()
 alexPopStartCode = do
-  c <- ausModify' $ \us -> let (c:st) = ausStartCodeStack us
-                           in  (us {ausStartCodeStack = st}, c)
-  alexSetStartCode c
+  us <- ausGet
+  case ausStartCodeStack us of
+    (c:st) -> do ausPut $ us {ausStartCodeStack = st}
+                 alexSetStartCode c 
+    _      -> return ()
+
+-- | Possibly inject accumulated error token
+alexInjectError :: Alex Token -> Alex Token
+alexInjectError next = do
+  us <- ausGet
+  case ausErrorAccum us of
+    Just (p,s) -> do ausPut $ us {ausErrorAccum = Nothing}
+                     c <- alexGetStartCode
+                     return (Token c p (C_Unknown s) (Just s))
+    _          -> next
+
+-- | Accumulate 1 char from erroneous input
+alexAccum1ErrorChar :: AlexAction ()
+alexAccum1ErrorChar (p,_,_,input) len = do
+  ausModify $ \us -> let i = take len input
+                     in  us {ausErrorAccum = Just $ maybe (p,i) (\(p,s) -> (p, s ++ i)) $ ausErrorAccum us}
 
 ------------------------------------------------------------------------------------------------
 -- Flags
@@ -445,9 +579,10 @@ mkBitmap xs = foldr (.|.) 0 [bit $ fromEnum x | x <- xs]
 -- Execution
 ------------------------------------------------------------------------------------------------
 
-scanner :: ScannerConfig -> String -> Either String [Token]
-scanner cfg str
+scanner :: ScannerConfig -> Int -> String -> Either String [Token]
+scanner cfg startcode str
   = runAlex str (do
+        alexSetStartCode startcode
         ausModify $ \s ->
           s { ausOptsBitmap = mkBitmap (scfgOpts cfg)
             , ausLangBitmap = mkBitmap [scfgLanguage cfg]
@@ -458,7 +593,7 @@ scanner cfg str
   where loop = do -- (t, m) <- alexComplementError alexMonadScan
                   t <- alexMonadScanUser
                   -- when (isJust m) (lexerError (fromJust m))
-                  let tok@(Token _ knd _) = t
+                  let tok@(Token _ _ knd _) = t
                   if (knd == C_EOF)
                      then return []
                      {-
@@ -474,17 +609,26 @@ scanner cfg str
                              return (tok : toks)
 
 -- Adapted alexMonadScan which propagates user state
+alexMonadScanUser :: Alex Token
 alexMonadScanUser = do
   inp <- alexGetInput
   sc <- alexGetStartCode
   us <- ausGet
   case alexScanUser us inp sc of
-    AlexEOF -> alexEOF
-    AlexError inp' -> alexError "lexical error"
-    AlexSkip  inp' len -> do
+    AlexEOF -> alexInjectError $ alexEOF
+    AlexError inp'
+      | alexInputEqual inp inp' -> alexError "lexical error"
+      | otherwise -> do
+            {- -- erronous, is looping... sometimes... apparently not always inp /= inp', TBD...
+            -}
+            alexAccum1ErrorChar inp 1
+            alexSetInput inp'
+            alexMonadScanUser
+            -- alexError "lexical error"
+    AlexSkip  inp' len -> alexInjectError $ do
         alexSetInput inp'
         alexMonadScanUser
-    AlexToken inp' len action -> do
+    AlexToken inp' len action -> alexInjectError $ do
         alexSetInput inp'
         action (ignorePendingBytes inp) len
 

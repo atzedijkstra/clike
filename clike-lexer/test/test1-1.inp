@@ -1,4 +1,20 @@
-a b c
+a b
 xx
+1 1L 0x1l 00LL
 // aap
 class
+#include <aap.h>
+#include "noot.h"
+#define a b
+#define u 
+        v
+#define p \
+        q
+
+#ifdef AAP
+# define class Clase
+#else
+# define class Klase
+#endif
+
+qq
