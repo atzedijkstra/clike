@@ -1,0 +1,81 @@
+-------------------------------------------------------------------------------------------
+-- Position embedded in AST
+-------------------------------------------------------------------------------------------
+
+{-
+DATA AllBaseNT
+  | *                   pos             : Pos
+-}
+
+-------------------------------------------------------------------------------------------
+-- Top level
+-------------------------------------------------------------------------------------------
+
+DATA AGItf
+  | AGItf               module          : Module
+
+DATA Module
+  | Mod                 -- declGroups      : DeclGroupL
+
+-------------------------------------------------------------------------------------------
+-- Declarations (table, var, type)
+-------------------------------------------------------------------------------------------
+
+{-
+DATA DeclGroup
+  | Bn                  bnDecls         : BnDeclL
+
+TYPE DeclGroupL         = [DeclGroup]
+
+DATA BnDecl
+  | Var                 nm              : Nm
+                        aspects			: BnVarAspectL
+  | Ty                  nm              : Nm
+                        ty              : TyExpr
+  | Table               nm              : Nm
+                        ty              : TyExpr
+                        args            : NmL
+                        res             : Nm
+                        argRows         : TblArgRowL
+                        resRows         : TblResRowL
+
+TYPE BnDeclL            = [BnDecl]
+
+DATA TblArgRow
+  | Row                 nm              : Nm
+                        columns         : TblArgEntryL
+
+TYPE TblArgRowL         = [TblArgRow]
+
+DATA TblArgEntry
+  | Nm                  nm              : Nm
+
+TYPE TblArgEntryL       = [TblArgEntry]
+
+DATA TblResRow
+  | Row                 nm              : Nm
+                        columns         : TblResEntryL
+
+TYPE TblResRowL         = [TblResRow]
+
+DATA TblResEntry
+  | Prob                pexpr           : ProbExpr
+
+TYPE TblResEntryL       = [TblResEntry]
+
+SET AllDecl             = DeclGroup DeclGroupL
+                          BnDecl BnDeclL
+                          TblResRow TblResRowL
+                          TblResEntry TblResEntryL
+                          TblArgRow TblArgRowL
+                          TblArgEntry TblArgEntryL
+
+-}
+
+-------------------------------------------------------------------------------------------
+-- All NT
+-------------------------------------------------------------------------------------------
+
+{-
+SET AllBaseNT           = AllDecl
+-}

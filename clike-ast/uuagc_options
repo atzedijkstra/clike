@@ -1,0 +1,3 @@
+file : "src/Language/CLike/AST.ag"
+options : data, rename, module "Language.CLike.AST"
+

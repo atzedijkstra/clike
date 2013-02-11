@@ -1,0 +1,13 @@
+-------------------------------------------------------------------------------------------
+-- Haskell wrapping around AG CLike AST
+-------------------------------------------------------------------------------------------
+
+MODULE {Language.CLike.AST}
+{ AGItf(..)
+, Module(..)
+}
+{
+-- import Bayes.BayeSay.Common
+}
+
+INCLUDE "AST/AbsSyn.ag"
