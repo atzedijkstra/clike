@@ -1,6 +1,8 @@
 a b
 xx
 1 1L 0x1l 00LL
+1e3
+
 // aap
 class
 #include <aap.h>
@@ -18,3 +20,20 @@ class
 #endif
 
 qq
+
+'a'
+'\x12'
+
+"\n"
+"aap"
+"\0"
+
+R
+R"aa(xx)aa"
+R"aaxxaa"
+R
+
+{
+[];
+a->b;
+}

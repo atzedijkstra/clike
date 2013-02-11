@@ -47,18 +47,19 @@ $large     = [$asclarge] -- $unilarge]
 $ascsmall  = [a-z \xdf-\xf6 \xf8-\xff]
 $small     = [$ascsmall \_] -- $unismall]
 
-$namebegin = [$large $small \. \$ \@]
+$namebegin = [$large $small] -- \. \$ \@]
 $namechar  = [$namebegin $digit]
 
 -- header char
 $h_char     = $printable_no_nl # [$whitechar >]
 $q_char     = $printable_no_nl # [$whitechar "]
 
--- number literal
+-- integer literal
 $octal_digit			= $octit
 @octal_literal			= 0 $octal_digit+
 $decimal_digit			= $ascdigit
-@decimal_literal		= $decimal_digit+
+@digit_sequence			= $decimal_digit+
+@decimal_literal		= ($decimal_digit # 0) @digit_sequence?
 $hexadecimal_digit		= $hexit
 @hexadecimal_literal 	= (0x | 0X) $hexadecimal_digit+
 $unsigned_suffix		= [uU]
@@ -67,15 +68,32 @@ $long_suffix			= [lL]
 @integer_suffix			= $unsigned_suffix $long_suffix? | $unsigned_suffix @long_long_suffix? | $long_suffix $unsigned_suffix? | @long_long_suffix $unsigned_suffix?
 @integer_literal		= (@octal_literal | @decimal_literal | @hexadecimal_literal) @integer_suffix?
 
-@decimal     = $digit+
-@octal       = $octit+
-@hexadecimal = $hexit+
-@exponent    = [eE] [\-\+]? @decimal
+-- float literal
+$floating_suffix		= [flFL]
+@exponent_part			= [eE] [\-\+]? @digit_sequence
+@fractional_constant	= @digit_sequence? \. @digit_sequence | @digit_sequence \.
+@floating_literal		= (@fractional_constant @exponent_part? | @digit_sequence @exponent_part) $floating_suffix?
 
-@floating_point = @decimal \. @decimal @exponent? | @decimal @exponent
+-- char/str literal
+@escape_sequence				= \\ ([\'\"\?\\abfnrtv] | $octal_digit{1,3} | x $hexadecimal_digit+)
+@hex_quad						= $hexadecimal_digit{4,4}
+@universal_character_name		= \\ (u @hex_quad | U @hex_quad @hex_quad)
+@c_char							= ($printable_no_nl # [\'\\]) | @escape_sequence | @universal_character_name
+@character_literal				= [uUL]? \' @c_char+ \'
+@s_char							= ($printable_no_nl # [\"\\]) | @escape_sequence | @universal_character_name
+@string_literal					= (u8 | u | U | L)? \" @s_char* \"
+@r_char							= $printable # \)
+@d_char							= $printable # [$whitechar \\ \( \)]
+@raw_string						= R \" @d_char* \( @r_char* \) @d_char* \"
 
-@escape      = \\ ([abfnrt\\\'\"\?] | x $hexit{1,2} | $octit{1,3})
-@strchar     = ($printable # [\"\\]) | @escape
+-- operator
+@op_1char						= \+ | \- | \* | \/ | \% | \^ | \& | \| | \~ | \! | \= | \< | \>
+@op_2char						= \+\= | \-\= | \*\= | \/\= | \%\= | \*\= | \&\= | \|\= | \<\< | \>\> | \=\= | \!\= | \<\= | \>\= | \&\& | \|\| | \+\+ | \-\- | \-\>
+@op_3char						= \>\>\= | \<\<\= | \-\>\*
+@op								= @op_1char | @op_2char | @op_3char
+
+-- identifier
+@identifier						= $namebegin $namechar*
 
 -- header name
 @header_name    = \< $h_char+ \> | \" $q_char+ \"
@@ -83,7 +101,7 @@ $long_suffix			= [lL]
 clike :-
 
 -- comment
-"//" [$printable_no_nl]* \n / {ifScannerOpt ScOpt_CommentAs1Token} {tkStr C_Comment}
+"//" [$printable_no_nl]* \n / {ifScannerOpt ScOpt_CommentAs1Token} {tkStr C_comment}
 "//" [$printable_no_nl]* \n ;
 
 -- preprocessor
@@ -106,16 +124,22 @@ clike :-
 }
 
 <cx_hash_include> {
-    @header_name    {tkStr C_String}
+    @header_name    {tkStr C_lit_string}
 }
 
 <cx_hash,cx_hash_include> {
     \\ $        ;
-    \n          {cxPop `andAction` tk C_hash_EOL}
+    \n          {cxPop `andAction` tk C_hash_eol}
 }
 
 -- literals
-@integer_literal	{tkStr C_Int}
+<0> {
+	@integer_literal	{tkStr C_lit_int}
+	@floating_literal	{tkStr C_lit_float}
+	@character_literal	{tkStr C_lit_char}
+	@string_literal		{tkStr C_lit_string}
+	@raw_string			{tkStr C_lit_string}		-- requires additional check on delimiters
+}
 
 -- keywords
 <0> {
@@ -206,11 +230,36 @@ clike :-
     xor_eq              / {ifLangs langsCXX}        {tk C_xor_eq}
 }
 
-$white_no_nl+ ;
+-- punctuation, delimiters, open/close pairs, ...
+<0> {
+	\{			{tk C_ocurly}
+	\}			{tk C_ccurly}
+	\[			{tk C_obrack}
+	\]			{tk C_cbrack}
+	\(			{tk C_oparen}
+	\)			{tk C_cparen}
+	\<\:		{tk C_oanglecolon}
+	\:\>		{tk C_canglecolon}
+	\<\%		{tk C_oangleperc}
+	\%\>		{tk C_cangleperc}
+	\;			{tk C_semic}
+	\:			{tk C_colon}
+	\,			{tk C_comma}
+	\.			{tk C_dot}
+	\.\.\.		{tk C_dotdotdot}
+	\;			{tk C_semic}
+}
 
--- $digit+ { tkStr (Int . read) }
-[\=\+\-\*\/\(\)] { tkStr (Sym . head) }
-$alpha [$alpha $digit \_ \']* { tkStr C_Name }
+-- operators
+<0> {
+	@op			{tkStr C_op}
+}
+
+-- identifier
+@identifier 	{tkStr C_name}
+
+-- white space skipping
+$white_no_nl+ ;
 
 -- default newline handling
 <0> {
@@ -218,7 +267,7 @@ $alpha [$alpha $digit \_ \']* { tkStr C_Name }
 }
 
 -- fallback, unrecognizable
--- $printable_no_nl+ {tkStr C_Unknown}
+-- $printable_no_nl+ {tkStr C_unknown}
 
 
 {
@@ -320,19 +369,44 @@ data TokenKind =
   | C_xor
   | C_xor_eq
 
+  -- Reserved symbols
+  | C_ocurly			-- {
+  | C_ccurly			-- }
+  | C_obrack			-- [
+  | C_cbrack			-- ]
+  | C_oparen			-- (
+  | C_cparen			-- )
+  | C_oanglecolon		-- <:
+  | C_canglecolon		-- :>
+  | C_oangleperc		-- <%
+  | C_cangleperc		-- %>
+  | C_hash				-- #
+  | C_hashhash			-- ##
+  | C_semic				-- ;
+  | C_colon				-- :
+  | C_comma				-- ,
+  | C_dot				-- .
+  | C_dotdotdot			-- ...
+
+  -- Operator
+  | C_op		String
+
   -- Ident
-  | C_Name      String
+  | C_name      String
   
   -- Literal
-  | C_String    String
-  | C_Int       String
-  | C_Float     Rational
+  | C_lit_string    String
+  | C_lit_char      String
+  | C_lit_int       String
+  | C_lit_float     String
+  -- | C_Ptr				-- treated as keyword
+  -- | C_Bool      Bool		-- treated as keyword
+  -- | C_UserDefined
   
   -- Comment
-  | C_Comment   String      -- comment including delimiter(s)
+  | C_comment   String      -- comment including delimiter(s)
   
   -- Preprocessor
-  | C_hash
   | C_hash_define
   | C_hash_elif
   | C_hash_else
@@ -344,11 +418,11 @@ data TokenKind =
   | C_hash_include
   | C_hash_pragma
   | C_hash_undef
-  | C_hash_EOL
+  | C_hash_eol
   
   -- Meta
-  | C_EOF
-  | C_Unknown   String      -- unrecognizable
+  | C_eof
+  | C_unknown   String      -- unrecognizable
   deriving (Eq,Show)
 
 ------------------------------------------------------------------------------------------------
@@ -377,7 +451,7 @@ data Token
 alexEOF :: Alex Token
 alexEOF = do
   c <- alexGetStartCode
-  return (Token c alexNoPos C_EOF Nothing)
+  return (Token c alexNoPos C_eof Nothing)
 
 ------------------------------------------------------------------------------------------------
 -- Result combinators, token actions
@@ -534,7 +608,7 @@ alexInjectError next = do
   case ausErrorAccum us of
     Just (p,s) -> do ausPut $ us {ausErrorAccum = Nothing}
                      c <- alexGetStartCode
-                     return (Token c p (C_Unknown s) (Just s))
+                     return (Token c p (C_unknown s) (Just s))
     _          -> next
 
 -- | Accumulate 1 char from erroneous input
@@ -594,7 +668,7 @@ scanner cfg startcode str
                   t <- alexMonadScanUser
                   -- when (isJust m) (lexerError (fromJust m))
                   let tok@(Token _ _ knd _) = t
-                  if (knd == C_EOF)
+                  if (knd == C_eof)
                      then return []
                      {-
                      then do f1 <- getLexerStringState
