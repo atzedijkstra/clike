@@ -23,9 +23,18 @@ Source-Repository head
 Library
   Hs-Source-Dirs:    src
   Extensions:        
-  Exposed-Modules:   Language.CLike.AST
+  Exposed-Modules:   Language.CLike.AST,
+                     Language.CLike.Parser
   Other-Modules:     
   Build-Depends:     base >= 4 && < 5,
                      uuagc >= 0.9.40.3,
-                     uuagc-cabal >= 1.0.3
+                     uuagc-cabal >= 1.0.3.0,
+                     clike-lexer >= 0.1.0.0,
+                     uu-parsinglib >= 2.7.4
 
+Executable test-ast1
+  Hs-Source-Dirs:    test
+  Main-Is:           Test1.hs
+  Build-Depends:     base >= 4 && < 5,
+                     clike-lexer >= 0.1.0.0,
+                     clike-ast >= 0.1.0.0

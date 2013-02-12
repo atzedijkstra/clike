@@ -30,7 +30,7 @@ Library
                      filepath >= 1.2,
                      transformers >= 0.3.0
 
-Executable test1
+Executable test-lexer1
   Hs-Source-Dirs:    test
   Main-Is:           Test1.hs
   Build-Depends:     base >= 4 && < 5,

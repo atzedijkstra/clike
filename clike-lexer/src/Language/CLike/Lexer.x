@@ -6,6 +6,7 @@
 ------------------------------------------------------------------------------------------------
 module Language.CLike.Lexer
   ( scanner
+  , Pos(..), noPos
   , Token(..)
   
   , ScannerOpt(..)
@@ -435,13 +436,20 @@ alexNoPos = AlexPn (-1) (-1) (-1)
 alexPosEqual :: AlexPosn -> AlexPosn -> Bool
 alexPosEqual (AlexPn p1 _ _) (AlexPn p2 _ _) = p1 == p2
 
+-- exported:
+type Pos = AlexPosn
+noPos = alexNoPos
+
 ------------------------------------------------------------------------------------------------
 -- The token type:
 ------------------------------------------------------------------------------------------------
 
-data Token
-  = Token Int		-- ^ context/state
-          AlexPosn TokenKind (Maybe String)
+data Token = Token
+  { tokCx 		:: Int		-- context/state
+  , tokPos 		:: AlexPosn
+  , tokKind 	:: TokenKind
+  , tokPayload 	:: (Maybe String)
+  }
   deriving (Eq,Show)
 
 ------------------------------------------------------------------------------------------------

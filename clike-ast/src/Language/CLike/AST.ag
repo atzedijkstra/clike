@@ -5,9 +5,13 @@
 MODULE {Language.CLike.AST}
 { AGItf(..)
 , Module(..)
+, Decl(..), DeclL
+, Expr(..), ExprL
+, Lit(..)
+, module Language.CLike.Lexer
 }
 {
--- import Bayes.BayeSay.Common
+import Language.CLike.Lexer(Pos)
 }
 
 INCLUDE "AST/AbsSyn.ag"

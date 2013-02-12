@@ -15,67 +15,61 @@ DATA AGItf
   | AGItf               module          : Module
 
 DATA Module
-  | Mod                 -- declGroups      : DeclGroupL
+  | Mod                 decls      		: DeclL
 
 -------------------------------------------------------------------------------------------
 -- Declarations (table, var, type)
 -------------------------------------------------------------------------------------------
 
-{-
-DATA DeclGroup
-  | Bn                  bnDecls         : BnDeclL
+DATA Decl
+  | None                  
 
-TYPE DeclGroupL         = [DeclGroup]
+TYPE DeclL	         	= [Decl]
 
-DATA BnDecl
-  | Var                 nm              : Nm
-                        aspects			: BnVarAspectL
-  | Ty                  nm              : Nm
-                        ty              : TyExpr
-  | Table               nm              : Nm
-                        ty              : TyExpr
-                        args            : NmL
-                        res             : Nm
-                        argRows         : TblArgRowL
-                        resRows         : TblResRowL
+SET AllDecl             = Decl DeclL
 
-TYPE BnDeclL            = [BnDecl]
+-------------------------------------------------------------------------------------------
+-- Expression
+-------------------------------------------------------------------------------------------
 
-DATA TblArgRow
-  | Row                 nm              : Nm
-                        columns         : TblArgEntryL
+DATA Expr
+  -- primary
+  | This
+  | Name				nm				: Name
+  | Lit					lit				: Lit
+  | Lam
 
-TYPE TblArgRowL         = [TblArgRow]
+  -- postfix
+  | Index				expr			: Expr		-- postfix-expression [ expression ]
+  						inx				: Expr
 
-DATA TblArgEntry
-  | Nm                  nm              : Nm
+TYPE ExprL	         	= [Expr]
 
-TYPE TblArgEntryL       = [TblArgEntry]
+SET AllExpr             = Expr ExprL
 
-DATA TblResRow
-  | Row                 nm              : Nm
-                        columns         : TblResEntryL
+-------------------------------------------------------------------------------------------
+-- Literal, value is represented as string
+-------------------------------------------------------------------------------------------
 
-TYPE TblResRowL         = [TblResRow]
+DATA Lit
+  | Int					str				: String
+  | Float				str				: String
+  | Char				str				: String
+  | String				str				: String
 
-DATA TblResEntry
-  | Prob                pexpr           : ProbExpr
+SET AllLit              = Lit
 
-TYPE TblResEntryL       = [TblResEntry]
+-------------------------------------------------------------------------------------------
+-- Name (for a var)
+-------------------------------------------------------------------------------------------
 
-SET AllDecl             = DeclGroup DeclGroupL
-                          BnDecl BnDeclL
-                          TblResRow TblResRowL
-                          TblResEntry TblResEntryL
-                          TblArgRow TblArgRowL
-                          TblArgEntry TblArgEntryL
+DATA Name
+  | Id					id				: String		-- simple id
 
--}
+SET AllName             = Name
 
 -------------------------------------------------------------------------------------------
 -- All NT
 -------------------------------------------------------------------------------------------
 
-{-
-SET AllBaseNT           = AllDecl
--}
+SET AllBaseNT           = AllDecl AllExpr AllLit AllName

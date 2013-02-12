@@ -1,0 +1,8 @@
+#!/bin/sh
+# build using cabal-dev
+
+# Note: ensure cabal-dev/bin is on your PATH to ensure use of the by cabal-dev compiled wxdirect
+#PATH=$HOME/Installs/wxHaskell-atze/cabal-dev/bin:$PATH
+#export PATH
+
+cabal-dev install  ./clike-lexer ./clike-ast
