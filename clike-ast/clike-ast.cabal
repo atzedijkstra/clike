@@ -14,7 +14,8 @@ Build-Type:          Custom
 Cabal-Version:       >= 1.8
 Extra-Source-Files:  uuagc_options,
                      Language/CLike/AST.ag,
-                     Language/CLike/AST/AbsSyn.ag
+                     Language/CLike/AST/AbsSyn.ag,
+                     Language/CLike/AST/PreProcess.ag
 
 Source-Repository head
   Type:              git
@@ -24,7 +25,8 @@ Library
   Hs-Source-Dirs:    src
   Extensions:        
   Exposed-Modules:   Language.CLike.AST,
-                     Language.CLike.Parser
+                     Language.CLike.Parser,
+                     Language.CLike.PreProcess
   Other-Modules:     
   Build-Depends:     base >= 4 && < 5,
                      uuagc >= 0.9.40.3,

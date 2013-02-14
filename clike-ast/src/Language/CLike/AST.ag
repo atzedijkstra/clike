@@ -3,15 +3,26 @@
 -------------------------------------------------------------------------------------------
 
 MODULE {Language.CLike.AST}
-{ AGItf(..)
-, Module(..)
-, Decl(..), DeclL
-, Expr(..), ExprL
-, Lit(..)
-, module Language.CLike.Lexer
-}
+    { AGItf(..), AGItfPrePr(..)
+    , Decl(..), DeclL
+    , PrePr(..), PrePrL
+    , PrePrExpr(..)
+    , Expr(..), ExprL
+    , Lit(..)
+    , Name(..), NameL
+    
+    , Module(..), ModulePrePr(..)
+    , emptyModulePrePr
+
+    , module Language.CLike.Lexer
+    }
 {
-import Language.CLike.Lexer(Pos)
+import Language.CLike.Lexer(Pos, Token, LexString)
 }
 
 INCLUDE "AST/AbsSyn.ag"
+
+{
+emptyModulePrePr :: ModulePrePr
+emptyModulePrePr = ModulePrePr_Mod []
+}

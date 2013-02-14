@@ -1,39 +1,21 @@
-a b
-xx
-1 1L 0x1l 00LL
-1e3
+init
 
-// aap
-class
 #include <aap.h>
 #include "noot.h"
+
+defs
+
 #define a b
-#define u 
+#define u(l,k)
         v
 #define p \
         q
 
+ifs
+
 #ifdef AAP
-# define class Clase
+# define cl Clase
 #else
-# define class Klase
+# define cl Klase
 #endif
 
-qq
-
-'a'
-'\x12'
-
-"\n"
-"aap"
-"\0"
-
-R
-R"aa(xx)aa"
-R"aaxxaa"
-R
-
-{
-[];
-a->b;
-}

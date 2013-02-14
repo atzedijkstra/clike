@@ -5,4 +5,12 @@
 #PATH=$HOME/Installs/wxHaskell-atze/cabal-dev/bin:$PATH
 #export PATH
 
-cabal-dev install  ./clike-lexer ./clike-ast
+cd clike-lexer
+cabal clean
+cabal --configure --cabal-lib-version=1.16.0.3
+cd ..
+cd clike-ast
+cabal clean
+make
+cd ..
+cabal-dev install ./clike-lexer ./clike-ast

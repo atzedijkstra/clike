@@ -7,7 +7,16 @@
 module Language.CLike.Lexer
   ( scanner
   , Pos(..), noPos
+  
+  , LexString
+  
+  , TokenKind(..)
   , Token(..)
+  , tokkindAllPrePr
+  
+  , noToken
+  , mkToken
+  , tokConcat
   
   , ScannerOpt(..)
   
@@ -88,10 +97,20 @@ $floating_suffix		= [flFL]
 @raw_string						= R \" @d_char* \( @r_char* \) @d_char* \"
 
 -- operator
-@op_1char						= \+ | \- | \* | \/ | \% | \^ | \& | \| | \~ | \! | \= | \< | \>
-@op_2char						= \+\= | \-\= | \*\= | \/\= | \%\= | \*\= | \&\= | \|\= | \<\< | \>\> | \=\= | \!\= | \<\= | \>\= | \&\& | \|\| | \+\+ | \-\- | \-\>
-@op_3char						= \>\>\= | \<\<\= | \-\>\*
-@op								= @op_1char | @op_2char | @op_3char
+@op_assign						= \+\= | \-\= | \*\= | \/\= | \%\= | \^\= | \&\= | \|\= | \= | \>\>\= | \<\<\=
+@op_pm							= \-\>\* | \.\*
+@op_mul							= \/ | \%
+@op_add							= \+ | \-
+@op_shift						= \<\< | \>\>
+@op_rel							= \<\= | \>\=
+@op_eq							= \=\= | \!\=
+@op_and							= \&
+@op_xor							= \^
+@op_ior							= \|
+@op_log_and						= \&\&
+@op_log_ior						= \|\|
+@op_unary_not					= \!
+@op_unary_upd					= \+\+ | \-\-
 
 -- identifier
 @identifier						= $namebegin $namechar*
@@ -102,15 +121,20 @@ $floating_suffix		= [flFL]
 clike :-
 
 -- comment
-"//" [$printable_no_nl]* \n / {ifScannerOpt ScOpt_CommentAs1Token} {tkStr C_comment}
+"//" [$printable_no_nl]* \n / {ifScannerOpt ScOpt_CommentAs1Token} {tk C_comment}
 "//" [$printable_no_nl]* \n ;
 
 -- preprocessor
 <0> {
-	^ \#     	{cxPush cx_hash `andAction` tk C_hash}
+	^ \#     	{cxPush cx_prepr `andAction` tk C_hash_bol}
 }
 
-<cx_hash> {
+<cx_prepr> {
+	\#\#     	{tk C_2hash}
+	\#     		{tk C_hash}
+}
+
+<cx_prepr> {
     define      {tk C_hash_define}
     elif        {tk C_hash_elif}
     else        {tk C_hash_else}
@@ -119,145 +143,159 @@ clike :-
     if          {tk C_hash_if}
     ifdef       {tk C_hash_ifdef}
     ifndef      {tk C_hash_ifndef}
-    include     {cxSet cx_hash_include `andAction` tk C_hash_include}
+    include     {cxSet cx_prepr_include `andAction` tk C_hash_include}
+    line        {tk C_hash_line}
     pragma      {tk C_hash_pragma}
     undef       {tk C_hash_undef}
 }
 
-<cx_hash_include> {
-    @header_name    {tkStr C_lit_string}
+<cx_prepr_include> {
+    @header_name    {tk C_lit_string}
 }
 
-<cx_hash,cx_hash_include> {
-    \\ $        ;
+<cx_prepr,cx_prepr_include> {
+    \\ \n       ;
     \n          {cxPop `andAction` tk C_hash_eol}
 }
 
 -- literals
-<0> {
-	@integer_literal	{tkStr C_lit_int}
-	@floating_literal	{tkStr C_lit_float}
-	@character_literal	{tkStr C_lit_char}
-	@string_literal		{tkStr C_lit_string}
-	@raw_string			{tkStr C_lit_string}		-- requires additional check on delimiters
-}
+@integer_literal	{tk C_lit_int}
+@floating_literal	{tk C_lit_float}
+@character_literal	{tk C_lit_char}
+@string_literal		{tk C_lit_string}
+@raw_string			{tk C_lit_string}		-- requires additional check on delimiters
 
 -- keywords
-<0> {
-    alignas             / {ifLangs langsCXX}        {tk C_alignas }
-    alignof             / {ifLangs langsCXX}        {tk C_alignof }
-    and                 / {ifLangs langsCXX}        {tk C_and}
-    and_eq              / {ifLangs langsCXX}        {tk C_and_eq}
-    asm                 / {ifLangs langsCXX}        {tk C_asm}
-    auto                                            {tk C_auto}
-    bitand              / {ifLangs langsCXX}        {tk C_bitand}
-    bitor               / {ifLangs langsCXX}        {tk C_bitor}
-    bool                / {ifLangs langsCXX}        {tk C_bool}
-    break                                           {tk C_break}
-    case                                            {tk C_case}
-    catch               / {ifLangs langsCXX}        {tk C_catch}
-    char                                            {tk C_char}
-    char16_t            / {ifLangs langsCXX}        {tk C_char16_t}
-    char32_t            / {ifLangs langsCXX}        {tk C_char32_t}
-    class               / {ifLangs langsCXX}        {tk C_class}
-    compl               / {ifLangs langsCXX}        {tk C_compl}
-    const                                           {tk C_const}
-    const_cast          / {ifLangs langsCXX}        {tk C_const_cast}
-    constexpr           / {ifLangs langsCXX}        {tk C_constexpr}
-    continue                                        {tk C_continue}
-    decltype            / {ifLangs langsCXX}        {tk C_decltype}
-    default                                         {tk C_default}
-    delete              / {ifLangs langsCXX}        {tk C_delete}
-    do                                              {tk C_do}
-    double                                          {tk C_double}
-    dynamic_cast        / {ifLangs langsCXX}        {tk C_dynamic_cast}
-    else                                            {tk C_else}
-    enum                                            {tk C_enum}
-    explicit            / {ifLangs langsCXX}        {tk C_explicit}
-    export              / {ifLangs langsCXX}        {tk C_export}
-    extern                                          {tk C_extern}
-    false               / {ifLangs langsCXX}        {tk C_false}
-    float                                           {tk C_float}
-    for                                             {tk C_for}
-    friend              / {ifLangs langsCXX}        {tk C_friend}
-    goto                                            {tk C_goto}
-    if                                              {tk C_if}
-    inline                                          {tk C_inline}
-    int                                             {tk C_int}
-    long                                            {tk C_long}
-    mutable             / {ifLangs langsCXX}        {tk C_mutable}
-    namespace           / {ifLangs langsCXX}        {tk C_namespace}
-    new                 / {ifLangs langsCXX}        {tk C_new}
-    noexcept            / {ifLangs langsCXX}        {tk C_noexcept}
-    not                 / {ifLangs langsCXX}        {tk C_not}
-    not_eq              / {ifLangs langsCXX}        {tk C_not_eq}
-    nullptr             / {ifLangs langsCXX}        {tk C_nullptr }
-    operator            / {ifLangs langsCXX}        {tk C_operator}
-    or                  / {ifLangs langsCXX}        {tk C_or}
-    or_eq               / {ifLangs langsCXX}        {tk C_or_eq}
-    private             / {ifLangs langsCXX}        {tk C_private}
-    protected           / {ifLangs langsCXX}        {tk C_protected}
-    public              / {ifLangs langsCXX}        {tk C_public}
-    register                                        {tk C_register}
-    reinterpret_cast    / {ifLangs langsCXX}        {tk C_reinterpret_cast}
-    restrict                                        {tk C_restrict}
-    return                                          {tk C_return}
-    short                                           {tk C_short}
-    signed                                          {tk C_signed}
-    sizeof                                          {tk C_sizeof}
-    static                                          {tk C_static}
-    static_assert       / {ifLangs langsCXX}        {tk C_static_assert}
-    static_cast         / {ifLangs langsCXX}        {tk C_static_cast}
-    struct                                          {tk C_struct}
-    switch                                          {tk C_switch}
-    template            / {ifLangs langsCXX}        {tk C_template}
-    this                / {ifLangs langsCXX}        {tk C_this}
-    thread_local        / {ifLangs langsCXX}        {tk C_thread_local}
-    throw               / {ifLangs langsCXX}        {tk C_throw}
-    true                / {ifLangs langsCXX}        {tk C_true}
-    try                 / {ifLangs langsCXX}        {tk C_try}
-    typedef                                         {tk C_typedef}
-    typeid              / {ifLangs langsCXX}        {tk C_typeid}
-    typename            / {ifLangs langsCXX}        {tk C_typename}
-    union                                           {tk C_union}
-    unsigned                                        {tk C_unsigned}
-    using               / {ifLangs langsCXX}        {tk C_using}
-    virtual             / {ifLangs langsCXX}        {tk C_virtual}
-    void                                            {tk C_void}
-    volatile                                        {tk C_volatile}
-    wchar_t             / {ifLangs langsCXX}        {tk C_wchar_t}
-    while                                           {tk C_while}
-    xor                 / {ifLangs langsCXX}        {tk C_xor}
-    xor_eq              / {ifLangs langsCXX}        {tk C_xor_eq}
-}
+alignas             / {ifLangs langsCXX}        {tk C_alignas }
+alignof             / {ifLangs langsCXX}        {tk C_alignof }
+and                 / {ifLangs langsCXX}        {tk C_and}
+and_eq              / {ifLangs langsCXX}        {tk C_and_eq}
+asm                 / {ifLangs langsCXX}        {tk C_asm}
+auto                                            {tk C_auto}
+bitand              / {ifLangs langsCXX}        {tk C_bitand}
+bitor               / {ifLangs langsCXX}        {tk C_bitor}
+bool                / {ifLangs langsCXX}        {tk C_bool}
+break                                           {tk C_break}
+case                                            {tk C_case}
+catch               / {ifLangs langsCXX}        {tk C_catch}
+char                                            {tk C_char}
+char16_t            / {ifLangs langsCXX}        {tk C_char16_t}
+char32_t            / {ifLangs langsCXX}        {tk C_char32_t}
+class               / {ifLangs langsCXX}        {tk C_class}
+compl               / {ifLangs langsCXX}        {tk C_compl}
+const                                           {tk C_const}
+const_cast          / {ifLangs langsCXX}        {tk C_const_cast}
+constexpr           / {ifLangs langsCXX}        {tk C_constexpr}
+continue                                        {tk C_continue}
+decltype            / {ifLangs langsCXX}        {tk C_decltype}
+default                                         {tk C_default}
+delete              / {ifLangs langsCXX}        {tk C_delete}
+do                                              {tk C_do}
+double                                          {tk C_double}
+dynamic_cast        / {ifLangs langsCXX}        {tk C_dynamic_cast}
+else                                            {tk C_else}
+enum                                            {tk C_enum}
+explicit            / {ifLangs langsCXX}        {tk C_explicit}
+export              / {ifLangs langsCXX}        {tk C_export}
+extern                                          {tk C_extern}
+false               / {ifLangs langsCXX}        {tk C_false}
+float                                           {tk C_float}
+for                                             {tk C_for}
+friend              / {ifLangs langsCXX}        {tk C_friend}
+goto                                            {tk C_goto}
+if                                              {tk C_if}
+inline                                          {tk C_inline}
+int                                             {tk C_int}
+long                                            {tk C_long}
+mutable             / {ifLangs langsCXX}        {tk C_mutable}
+namespace           / {ifLangs langsCXX}        {tk C_namespace}
+new                 / {ifLangs langsCXX}        {tk C_new}
+noexcept            / {ifLangs langsCXX}        {tk C_noexcept}
+not                 / {ifLangs langsCXX}        {tk C_not}
+not_eq              / {ifLangs langsCXX}        {tk C_not_eq}
+nullptr             / {ifLangs langsCXX}        {tk C_nullptr }
+operator            / {ifLangs langsCXX}        {tk C_operator}
+or                  / {ifLangs langsCXX}        {tk C_or}
+or_eq               / {ifLangs langsCXX}        {tk C_or_eq}
+private             / {ifLangs langsCXX}        {tk C_private}
+protected           / {ifLangs langsCXX}        {tk C_protected}
+public              / {ifLangs langsCXX}        {tk C_public}
+register                                        {tk C_register}
+reinterpret_cast    / {ifLangs langsCXX}        {tk C_reinterpret_cast}
+restrict                                        {tk C_restrict}
+return                                          {tk C_return}
+short                                           {tk C_short}
+signed                                          {tk C_signed}
+sizeof                                          {tk C_sizeof}
+static                                          {tk C_static}
+static_assert       / {ifLangs langsCXX}        {tk C_static_assert}
+static_cast         / {ifLangs langsCXX}        {tk C_static_cast}
+struct                                          {tk C_struct}
+switch                                          {tk C_switch}
+template            / {ifLangs langsCXX}        {tk C_template}
+this                / {ifLangs langsCXX}        {tk C_this}
+thread_local        / {ifLangs langsCXX}        {tk C_thread_local}
+throw               / {ifLangs langsCXX}        {tk C_throw}
+true                / {ifLangs langsCXX}        {tk C_true}
+try                 / {ifLangs langsCXX}        {tk C_try}
+typedef                                         {tk C_typedef}
+typeid              / {ifLangs langsCXX}        {tk C_typeid}
+typename            / {ifLangs langsCXX}        {tk C_typename}
+union                                           {tk C_union}
+unsigned                                        {tk C_unsigned}
+using               / {ifLangs langsCXX}        {tk C_using}
+virtual             / {ifLangs langsCXX}        {tk C_virtual}
+void                                            {tk C_void}
+volatile                                        {tk C_volatile}
+wchar_t             / {ifLangs langsCXX}        {tk C_wchar_t}
+while                                           {tk C_while}
+xor                 / {ifLangs langsCXX}        {tk C_xor}
+xor_eq              / {ifLangs langsCXX}        {tk C_xor_eq}
 
 -- punctuation, delimiters, open/close pairs, ...
-<0> {
-	\{			{tk C_ocurly}
-	\}			{tk C_ccurly}
-	\[			{tk C_obrack}
-	\]			{tk C_cbrack}
-	\(			{tk C_oparen}
-	\)			{tk C_cparen}
-	\<\:		{tk C_oanglecolon}
-	\:\>		{tk C_canglecolon}
-	\<\%		{tk C_oangleperc}
-	\%\>		{tk C_cangleperc}
-	\;			{tk C_semic}
-	\:			{tk C_colon}
-	\,			{tk C_comma}
-	\.			{tk C_dot}
-	\.\.\.		{tk C_dotdotdot}
-	\;			{tk C_semic}
-}
+\{			{tk C_ocurly}
+\}			{tk C_ccurly}
+\[			{tk C_obrack}
+\]			{tk C_cbrack}
+\(			{tk C_oparen}
+\)			{tk C_cparen}
+\<			{tk C_oangle}
+\>			{tk C_cangle}
+\<\:		{tk C_oanglecolon}
+\:\>		{tk C_canglecolon}
+\<\%		{tk C_oangleperc}
+\%\>		{tk C_cangleperc}
+\-\>		{tk C_arrow}
+-- \.\*		{tk C_dotstar}
+\;			{tk C_semic}
+\*			{tk C_star}
+\~			{tk C_tilde}
+\?			{tk C_quest}
+\:			{tk C_colon}
+\:\:		{tk C_2colon}
+\,			{tk C_comma}
+\.			{tk C_dot}
+\.\.\.		{tk C_3dot}
+\;			{tk C_semic}
 
 -- operators
-<0> {
-	@op			{tkStr C_op}
-}
+@op_assign		{tk C_op_assign }
+@op_pm			{tk C_op_pm		}
+@op_mul			{tk C_op_mul	}
+@op_add			{tk C_op_add	}
+@op_shift		{tk C_op_shift	}
+@op_rel			{tk C_op_rel	}
+@op_eq			{tk C_op_eq		}
+@op_and			{tk C_op_and	}
+@op_xor			{tk C_op_xor	}
+@op_ior			{tk C_op_or		}
+@op_log_and		{tk C_op_log_and}
+@op_log_ior		{tk C_op_log_or }
+@op_unary_not	{tk C_op_unary_not}
+@op_unary_upd	{tk C_op_unary_upd}
 
 -- identifier
-@identifier 	{tkStr C_name}
+@identifier 	{tk C_name}
 
 -- white space skipping
 $white_no_nl+ ;
@@ -273,16 +311,21 @@ $white_no_nl+ ;
 
 {
 ------------------------------------------------------------------------------------------------
+-- The string representation used and delivered by the lexer
+------------------------------------------------------------------------------------------------
+
+-- | Lexer string, placeholder for future changes into (e.g.) ByteString
+type LexString = String
+
+------------------------------------------------------------------------------------------------
 -- The token variations
 ------------------------------------------------------------------------------------------------
 
-data TokenKind =
-    Sym Char
-  | Var String
-  | Int Integer
 
+-- | Token variations, below grouping is important for groups defined for the parser (in terms of first/last of group)
+data TokenKind =
   -- Reserved keywords shared by all clike variants: C, C++
-  | C_auto
+    C_auto
   | C_break
   | C_case
   | C_char
@@ -377,37 +420,59 @@ data TokenKind =
   | C_cbrack			-- ]
   | C_oparen			-- (
   | C_cparen			-- )
+  | C_oangle			-- <
+  | C_cangle			-- >
   | C_oanglecolon		-- <:
   | C_canglecolon		-- :>
   | C_oangleperc		-- <%
   | C_cangleperc		-- %>
-  | C_hash				-- #
-  | C_hashhash			-- ##
+  | C_arrow				-- ->
+  -- | C_dotstar			-- .*
+  | C_hash				-- #, separate C_hash_bol for start of preprocessing control
+  | C_star				-- \*
+  | C_tilde				-- ~
+  | C_2hash				-- ##
+  | C_quest				-- ?
   | C_semic				-- ;
   | C_colon				-- :
+  | C_2colon			-- ::
   | C_comma				-- ,
   | C_dot				-- .
-  | C_dotdotdot			-- ...
+  | C_3dot			    -- ...
 
   -- Operator
-  | C_op		String
+  | C_op_assign			-- assignment ops, *=, ...
+  | C_op_pm				-- pointer ops, ->*, ...
+  | C_op_mul			-- multipicative ops, *, ...
+  | C_op_add			-- additive ops, +, ...
+  | C_op_shift			-- shift ops, <<, ...
+  | C_op_rel			-- relational ops, <=, ...
+  | C_op_eq				-- equality ops, ==, ...
+  | C_op_and			-- &
+  | C_op_xor			-- ^
+  | C_op_or				-- |
+  | C_op_log_and		-- &&
+  | C_op_log_or			-- ||
+  | C_op_unary_not		-- !
+  | C_op_unary_upd		-- prefix/postfix incr/decr update, ++, ...
 
   -- Ident
-  | C_name      String
+  | C_name
   
   -- Literal
-  | C_lit_string    String
-  | C_lit_char      String
-  | C_lit_int       String
-  | C_lit_float     String
+  | C_lit_string
+  | C_lit_char  
+  | C_lit_int   
+  | C_lit_float 
   -- | C_Ptr				-- treated as keyword
   -- | C_Bool      Bool		-- treated as keyword
   -- | C_UserDefined
   
   -- Comment
-  | C_comment   String      -- comment including delimiter(s)
+  | C_comment   	        -- comment including delimiter(s)
   
   -- Preprocessor
+  | C_hash_bol				-- # at begin of line, begin of preprocessing control
   | C_hash_define
   | C_hash_elif
   | C_hash_else
@@ -417,14 +482,26 @@ data TokenKind =
   | C_hash_ifdef
   | C_hash_ifndef
   | C_hash_include
+  | C_hash_line
   | C_hash_pragma
   | C_hash_undef
   | C_hash_eol
   
   -- Meta
   | C_eof
-  | C_unknown   String      -- unrecognizable
-  deriving (Eq,Show)
+  | C_unknown               -- unrecognizable
+  | C_notoken				-- nothing
+  deriving (Eq,Enum,Show)
+
+-- | TokenKinds acceptable for preprocessing content, i.e. inbetween #if #else etc
+tokkindAllPrePr :: [TokenKind]
+tokkindAllPrePr 
+  =  [C_name]
+  ++ [C_lit_string .. C_lit_float]
+  ++ [C_ocurly .. C_3dot]
+  ++ [C_op_assign .. C_op_unary_upd]
+  ++ [C_auto .. C_while]
+  ++ [C_alignas .. C_xor_eq]
 
 ------------------------------------------------------------------------------------------------
 -- Position utils
@@ -445,12 +522,32 @@ noPos = alexNoPos
 ------------------------------------------------------------------------------------------------
 
 data Token = Token
-  { tokCx 		:: Int		-- context/state
-  , tokPos 		:: AlexPosn
-  , tokKind 	:: TokenKind
-  , tokPayload 	:: (Maybe String)
+  { tokCx 		:: !Int		-- context/state
+  , tokPos 		:: !AlexPosn
+  , tokKind 	:: !TokenKind
+  , tokPayload 	:: (Maybe LexString)
   }
-  deriving (Eq,Show)
+  deriving (Show)
+
+instance Eq Token where
+  t1 == t2 = tokKind t1 == tokKind t2
+
+emptyToken :: Token
+emptyToken = Token 0 noPos C_eof Nothing
+
+noToken :: Token
+noToken = Token 0 noPos C_notoken Nothing
+
+-- | Make a simple token, intended for use outside, by parser combinator lib
+mkToken :: TokenKind -> Token
+mkToken tk = emptyToken {tokKind = tk}
+
+-- | Concat payload
+tokConcat :: Token -> Token -> Token
+tokConcat t1@(Token {tokPayload=Just s1})    (Token {tokPayload=Just s2}) = t1 {tokPayload = Just $ s1 ++ s2}
+tokConcat t1@(Token {tokPayload=Just _ })    _                            = t1
+tokConcat _                               t2@(Token {tokPayload=Just _ }) = t2
+tokConcat _                                  _                            = error "tokConcat"
 
 ------------------------------------------------------------------------------------------------
 -- Hooks used by machinery
@@ -459,18 +556,19 @@ data Token = Token
 alexEOF :: Alex Token
 alexEOF = do
   c <- alexGetStartCode
-  return (Token c alexNoPos C_eof Nothing)
+  return $ emptyToken {tokCx = c, tokKind = C_eof}
 
 ------------------------------------------------------------------------------------------------
 -- Result combinators, token actions
 ------------------------------------------------------------------------------------------------
 
 tk :: TokenKind -> AlexAction Token
-tk t (p, _, _, _) _ = do
+tk t (p, _, _, input) len = do
   c <- alexGetStartCode
-  return (Token c p t Nothing)
+  return (Token c p t (Just s))
+ where s = take len input
 
-tkStr :: (String -> TokenKind) -> AlexAction Token
+tkStr :: (LexString -> TokenKind) -> AlexAction Token
 tkStr t (p, _, _, input) len = do
   c <- alexGetStartCode
   return (Token c p (t s) (Just s))
@@ -559,8 +657,8 @@ data AlexUserState = AlexUserState
   , ausLangBitmap       :: !Bitmap
   , ausConfig           :: ScannerConfig
   , ausStartCodeStack   :: [Int]
-  , ausErrorAccum       :: Maybe (AlexPosn,String)  -- accumulation of error input, finally leading to additional error token
-  , ausNonLexedStrings  :: [(AlexPosn,String)]      -- non recognized parts, all in reverse order
+  , ausErrorAccum       :: Maybe (AlexPosn,LexString)  -- accumulation of error input, finally leading to additional error token
+  , ausNonLexedStrings  :: [(AlexPosn,LexString)]      -- non recognized parts, all in reverse order
   }
 
 alexInitUserState :: AlexUserState
@@ -616,7 +714,7 @@ alexInjectError next = do
   case ausErrorAccum us of
     Just (p,s) -> do ausPut $ us {ausErrorAccum = Nothing}
                      c <- alexGetStartCode
-                     return (Token c p (C_unknown s) (Just s))
+                     return (Token c p C_unknown (Just s))
     _          -> next
 
 -- | Accumulate 1 char from erroneous input
@@ -661,7 +759,7 @@ mkBitmap xs = foldr (.|.) 0 [bit $ fromEnum x | x <- xs]
 -- Execution
 ------------------------------------------------------------------------------------------------
 
-scanner :: ScannerConfig -> Int -> String -> Either String [Token]
+scanner :: ScannerConfig -> Int -> LexString -> Either String [Token]
 scanner cfg startcode str
   = runAlex str (do
         alexSetStartCode startcode

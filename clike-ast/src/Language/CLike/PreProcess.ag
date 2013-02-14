@@ -1,0 +1,89 @@
+-------------------------------------------------------------------------------------------
+-- Preprocess a module
+-------------------------------------------------------------------------------------------
+
+MODULE {Language.CLike.PreProcess}
+  { preprocessModule
+  }
+{
+-------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------
+import Language.CLike.AST
+-------------------------------------------------------------------------------------------
+}
+
+INCLUDE "AST/AbsSyn.ag"
+
+WRAPPER AGItfPrePr
+
+{
+preprocessModule :: ModulePrePr -> [Token]
+preprocessModule m
+  = toks_Syn_AGItfPrePr r
+  where r = wrap_AGItfPrePr
+              (sem_AGItfPrePr (AGItfPrePr_AGItf m))
+              (Inh_AGItfPrePr {})
+}
+
+-------------------------------------------------------------------------------------------
+-- Newly generated tokens
+-------------------------------------------------------------------------------------------
+
+ATTR AllPrePr AGItfPrePr ModulePrePr [ | | toks USE {++} {[]} : {[Token]} ]
+
+SEM PrePr
+  | Toks		lhs			.	toks		=	@toks
+
+-------------------------------------------------------------------------------------------
+-- Unique ids, for the graph representation
+-------------------------------------------------------------------------------------------
+
+{-
+ATTR AllBaseNT Module [ | uniq: UID | ]
+
+SEM AGItf
+  | AGItf       loc         .   uniq        = 0
+
+SEM BnDecl
+  | Var         loc         .   vUniq       : UNIQUEREF uniq
+
+-------------------------------------------------------------------------------------------
+-- Threaded state map for holding generated UIDs for vars
+-------------------------------------------------------------------------------------------
+
+ATTR AllBaseNT Module [ | var2UidMp: {OnceAddMp Nm UID} | ]
+
+SEM AGItf
+  | AGItf       loc         .   var2UidMp   = Map.empty
+
+SEM BnDecl
+  | Var         (loc.vUID,aspects.var2UidMp)= onceAddMpAdd @nm @vUniq @lhs.var2UidMp
+
+-------------------------------------------------------------------------------------------
+-- Threaded state graph for network gathering var defs
+-------------------------------------------------------------------------------------------
+
+ATTR AllBaseNT Module [ | netwVar: BSNetwork | ]
+
+SEM AGItf
+  | AGItf       loc         .   netwVar     = emptyBSNetwork
+
+SEM BnDecl
+  | Var         aspects     .   netwVar     = HB.addLabeledVertex (show @nm) (HB.Vertex @vUID) () @lhs.netwVar
+
+-------------------------------------------------------------------------------------------
+-- Translation of gathered network to hbayes encoding, using the 'official' primitives 
+-------------------------------------------------------------------------------------------
+
+ATTR AGItf [ | | hbayesNetwork: {HB.SBN HB.CPT} ]
+
+SEM AGItf
+  | AGItf       loc			.	netwFinal	= @module.netwVar
+  				lhs         .   hbayesNetwork
+                                            = HB.execBN $ do
+                                                let verts = HB.allVertices @netwFinal
+                                                vars <- forM verts
+                                                             (\v -> HB.variableWithSize (fromJust $ HB.vertexLabel @netwFinal v) 2)
+                                                return ()
+
+-}

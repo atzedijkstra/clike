@@ -2,10 +2,8 @@
 -- Position embedded in AST
 -------------------------------------------------------------------------------------------
 
-{-
 DATA AllBaseNT
   | *                   pos             : Pos
--}
 
 -------------------------------------------------------------------------------------------
 -- Top level
@@ -16,6 +14,12 @@ DATA AGItf
 
 DATA Module
   | Mod                 decls      		: DeclL
+
+DATA AGItfPrePr
+  | AGItf               module          : ModulePrePr
+
+DATA ModulePrePr
+  | Mod                 preprs      	: PrePrL
 
 -------------------------------------------------------------------------------------------
 -- Declarations (table, var, type)
@@ -29,6 +33,41 @@ TYPE DeclL	         	= [Decl]
 SET AllDecl             = Decl DeclL
 
 -------------------------------------------------------------------------------------------
+-- Preprocessing
+-------------------------------------------------------------------------------------------
+
+DATA PrePr
+  -- definitions
+  | Define				nm				: Name
+  						params			: {[Name]}
+  						paramsHasDots	: Bool
+  						body			: {[Token]}
+  | Undef				nm				: Name
+  
+  -- choice
+  | IfThenElse			expr			: PrePrExpr
+  						toksThen		: PrePrL
+  						preprElse		: PrePrL
+
+  -- just tokens
+  | Toks				toks			: {[Token]}
+  
+  -- misc
+  | Include				incl			: LexString
+  | Line				toks			: {[Token]}
+  | Error				toks			: {[Token]}
+  | Pragma				toks			: {[Token]}
+
+DATA PrePrExpr
+  | Expr				expr			: Expr
+  | IsDefined			nm				: Name
+  | IsNotDefined		nm				: Name
+
+TYPE PrePrL	         	= [PrePr]
+
+SET AllPrePr            = PrePr PrePrL PrePrExpr
+
+-------------------------------------------------------------------------------------------
 -- Expression
 -------------------------------------------------------------------------------------------
 
@@ -39,9 +78,26 @@ DATA Expr
   | Lit					lit				: Lit
   | Lam
 
+  -- infix
+  | OpInfix				op				: LexString
+  						exprl			: Expr
+  						exprr			: Expr
+
   -- postfix
   | Index				expr			: Expr		-- postfix-expression [ expression ]
   						inx				: Expr
+  | Call				expr			: Expr		-- postfix-expression ( expression-list opt)
+  						args			: ExprL
+  | IfThenElse 			exprCond		: Expr		-- logical-or-expression ? expression : assignment-expression
+  						exprThen		: Expr
+  						exprElse		: Expr
+
+  -- Initialization
+  | Init				initExprs		: ExprL
+  						hasDots			: Bool
+
+  -- Comma sep list of expr
+  | Exprs				exprs			: ExprL
 
 TYPE ExprL	         	= [Expr]
 
@@ -52,10 +108,10 @@ SET AllExpr             = Expr ExprL
 -------------------------------------------------------------------------------------------
 
 DATA Lit
-  | Int					str				: String
-  | Float				str				: String
-  | Char				str				: String
-  | String				str				: String
+  | Int					str				: LexString
+  | Float				str				: LexString
+  | Char				str				: LexString
+  | String				str				: LexString
 
 SET AllLit              = Lit
 
@@ -64,12 +120,23 @@ SET AllLit              = Lit
 -------------------------------------------------------------------------------------------
 
 DATA Name
-  | Id					id				: String		-- simple id
+  | Id					id				: LexString		-- simple id
+  | Op					id				: LexString		-- operator ...
+  | Tilde				nm				: Name			-- ~ class name
+  | Qual				nm				: Name			-- :: ...
+  | QualNest			nmQuals			: NameL			-- ::opt ... :: ...
+  						nm				: Name
+  | DeclType			expr			: Expr			-- decltype ( expr )
+  | Templ				nm				: Name			-- templ-nm < args ... >
+  						nmArgs			: NameL
+  						hasDots			: Bool
 
-SET AllName             = Name
+TYPE NameL				= [Name]
+
+SET AllName             = Name NameL
 
 -------------------------------------------------------------------------------------------
 -- All NT
 -------------------------------------------------------------------------------------------
 
-SET AllBaseNT           = AllDecl AllExpr AllLit AllName
+SET AllBaseNT           = AllDecl AllPrePr AllExpr AllLit AllName
