@@ -2,17 +2,19 @@
 -- Preprocess a module
 -------------------------------------------------------------------------------------------
 
-MODULE {Language.CLike.PreProcess}
+MODULE {Language.CLike.PreProcess.PreProcess}
   { preprocessModule
   }
 {
 -------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------
-import Language.CLike.AST
+import           Language.CLike.AST
+import qualified Language.CLike.PreProcess.Env as E
+import           Language.CLike.PreProcess.State
 -------------------------------------------------------------------------------------------
 }
 
-INCLUDE "AST/AbsSyn.ag"
+INCLUDE "../AST/AbsSyn.ag"
 
 WRAPPER AGItfPrePr
 

@@ -1,5 +1,8 @@
 file : "src/Language/CLike/AST.ag"
 options : data, rename, module "Language.CLike.AST"
 
-file : "src/Language/CLike/PreProcess.ag"
+file : "src/Language/CLike/PreProcess/PreProcess.ag"
+options : catas, semfuns, signatures, pretty, rename
+
+file : "src/Language/CLike/PreProcess/Eval.ag"
 options : catas, semfuns, signatures, pretty, rename

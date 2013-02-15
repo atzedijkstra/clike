@@ -6,17 +6,24 @@ DATA AllBaseNT
   | *                   pos             : Pos
 
 -------------------------------------------------------------------------------------------
--- Top level
+-- Interfaces for wrapping
 -------------------------------------------------------------------------------------------
 
 DATA AGItf
   | AGItf               module          : Module
 
-DATA Module
-  | Mod                 decls      		: DeclL
-
 DATA AGItfPrePr
   | AGItf               module          : ModulePrePr
+
+DATA AGItfExpr
+  | AGItf               expr            : Expr
+
+-------------------------------------------------------------------------------------------
+-- Top level
+-------------------------------------------------------------------------------------------
+
+DATA Module
+  | Mod                 decls      		: DeclL
 
 DATA ModulePrePr
   | Mod                 preprs      	: PrePrL
@@ -79,7 +86,7 @@ DATA Expr
   | Lam
 
   -- infix
-  | OpInfix				op				: LexString
+  | OpInfix				op				: Op
   						exprl			: Expr
   						exprr			: Expr
 

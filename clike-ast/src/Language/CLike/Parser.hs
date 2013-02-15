@@ -14,6 +14,7 @@ module Language.CLike.Parser
 
   , run
   , runPrePr
+  , runExpr
   )
   where
 
@@ -88,6 +89,13 @@ runPrePr inp = do
                   forM_ errors (putStrLn . show)
                   return m
 
+-- | Run Expr parser through Tokens
+runExpr :: [Token] -> Either String Expr
+runExpr t | null errors = Right e
+          | otherwise   = Left $ unlines $ map show errors
+  where r@(e, errors) = parse ((,) <$> pExpr <*> pEnd) (createStr noPos t)
+
+
 -------------------------------------------------------------------------------------------
 -- Token parsers
 -------------------------------------------------------------------------------------------
@@ -103,6 +111,10 @@ pTk tk = (\t -> (tokPos t, tokPayload t)) <$> pTkRaw tk
 -- | Token parser, only position info
 pTkP :: TokenKind -> CP Pos
 pTkP tk = fst <$> pTk tk
+
+-- | Token parser, Op specific
+pTkO :: TokenKind -> CP (Pos,Op)
+pTkO tk = (\t -> (tokPos t, tokKind t)) <$> pTkRaw tk
 
 -- | Token parser, only string info
 pTkS :: TokenKind -> CP LexString
@@ -137,11 +149,15 @@ pComma = pTk C_comma
 -- | Convenience for tupling
 p1 <+> p2 = (,) <$> p1 <*> p2
 
--- | Make infix op parser
-mkInfP :: [TokenKind] -> CP Expr -> CP Expr
-mkInfP tks p = pChainr (uncurry Expr_OpInfix <$> pAny pTk tks) p
+-- | Make infix op parser, also providing the chaining variant
+mkInfP' :: (CP (Expr -> Expr -> Expr) -> CP Expr -> CP Expr) -> [TokenKind] -> CP Expr -> CP Expr
+mkInfP' chn tks p = chn (uncurry Expr_OpInfix <$> pAny pTkO tks) p
 
--- Something optional
+-- | Make infix op parser, defaulting to right associative
+mkInfP :: [TokenKind] -> CP Expr -> CP Expr
+mkInfP = mkInfP' pChainr
+
+-- | Something optional, yielding only its presence
 pOpt :: CP x -> CP Bool
 pOpt p = isJust <$> pMaybe p
 
@@ -177,9 +193,11 @@ posStringConcat (p1,s1) (_,s2) = (p1,s1++s2)
 
 pModule :: CP Module
 pModulePrePr :: CP ModulePrePr
-(pModule,pModulePrePr)
+pExpr :: CP Expr
+(pModule,pModulePrePr,pExpr)
   = ( Module_Mod <$> pure []
     , ModulePrePr_Mod <$> pPrePrL
+    , pExpr
     )
   where 
     -- top level decls
@@ -238,7 +256,7 @@ pModulePrePr :: CP ModulePrePr
     pIdOperator :: CP Name
     pIdOperator
       = uncurry Name_Op
-        <$> (   pAny pTk [C_op_assign, C_op_pm, C_op_mul, C_op_add, C_op_shift, C_op_rel, C_op_eq, C_op_and, C_op_xor, C_op_or, C_op_log_and, C_op_log_or, C_op_unary_not, C_op_unary_upd]
+        <$> (   pAny pTk tokkindAllOp
             <|> pAny pTk [C_star, C_tilde, C_oangle, C_cangle, C_arrow]
             <|> posStringConcat <$> pTk C_oparen <*> pTk C_cparen
             <|> pOCBrack
@@ -302,22 +320,24 @@ pModulePrePr :: CP ModulePrePr
 
     pExprAssign :: CP Expr
     pExprAssign
-      =   foldr mkInfP pExprCast
-             [ [C_op_log_or ]
-             , [C_op_log_and]
-             , [C_op_or     ]
-             , [C_op_xor    ]
-             , [C_op_and    ]
-             , [C_op_eq     ]
-             , [C_op_rel    ] ++ [C_oangle, C_cangle]
-             , [C_op_shift  ]
-             , [C_op_add    ]
-             , [C_op_mul    ] ++ [C_star]
-             , [C_op_pm     ]
+      =   foldr (uncurry mkInfP') pExprCast
+             [ (pChainr, [C_op_log_or ])
+             , (pChainr, [C_op_log_and])
+             , (pChainl, [C_op_or     ])
+             , (pChainl, [C_op_xor    ])
+             , (pChainl, [C_op_and    ])
+             , (pChainl, [C_op_eq, C_op_neq])
+             , (pChainl, [C_op_ge, C_op_le] ++ [C_oangle, C_cangle])
+             , (pChainl, [C_op_shl, C_op_shr])
+             , (pChainl, [C_op_add, C_op_sub])
+             , (pChainl, [C_op_div, C_op_mod] ++ [C_star])
+             , (pChainl, [C_op_pm, C_op_ppm])
              ]
           <**> (   pure id
                <|> (\t e c -> unPos Expr_IfThenElse c t e) <$ pTk C_quest <*> pExpr <* pTk C_colon <*> pExprAssign
-               <|> (\(p,o) r l -> Expr_OpInfix p o l r) <$> pTk C_op_assign <*> pExprInitializerClause
+               <|> (\(p,o) r l -> Expr_OpInfix p o l r)
+                   <$> pAny pTkO [C_op_assign, C_op_assign_add, C_op_assign_sub, C_op_assign_mul, C_op_assign_div, C_op_assign_mod, C_op_assign_xor, C_op_assign_and, C_op_assign_or, C_op_assign_shl, C_op_assign_shr]
+                   <*> pExprInitializerClause
                )
 
     pExprInitializerList :: CP (Pos -> Expr)

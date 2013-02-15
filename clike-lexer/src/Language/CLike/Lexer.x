@@ -12,7 +12,7 @@ module Language.CLike.Lexer
   
   , TokenKind(..)
   , Token(..)
-  , tokkindAllPrePr
+  , tokkindAllOp, tokkindAllPrePr
   
   , noToken
   , mkToken
@@ -97,20 +97,37 @@ $floating_suffix		= [flFL]
 @raw_string						= R \" @d_char* \( @r_char* \) @d_char* \"
 
 -- operator
-@op_assign						= \+\= | \-\= | \*\= | \/\= | \%\= | \^\= | \&\= | \|\= | \= | \>\>\= | \<\<\=
-@op_pm							= \-\>\* | \.\*
-@op_mul							= \/ | \%
-@op_add							= \+ | \-
-@op_shift						= \<\< | \>\>
-@op_rel							= \<\= | \>\=
-@op_eq							= \=\= | \!\=
+@op_assign						= \=
+@op_assign_add					= \+\=
+@op_assign_sub					= \-\= 
+@op_assign_mul					= \*\= 
+@op_assign_div					= \/\= 
+@op_assign_mod					= \%\= 
+@op_assign_xor					= \^\= 
+@op_assign_and					= \&\=
+@op_assign_or					= \|\= 
+@op_assign_shl					= \>\>\=
+@op_assign_shr					= \<\<\=
+@op_pm							= \.\*
+@op_ppm							= \-\>\*
+@op_div							= \/
+@op_mod							= \%
+@op_add							= \+
+@op_sub							= \-
+@op_shl							= \<\<
+@op_shr							= \>\>
+@op_ge							= \>\=
+@op_le							= \<\=
+@op_eq							= \=\=
+@op_neq							= \!\=
 @op_and							= \&
 @op_xor							= \^
-@op_ior							= \|
+@op_or							= \|
 @op_log_and						= \&\&
-@op_log_ior						= \|\|
+@op_log_or						= \|\|
 @op_unary_not					= \!
-@op_unary_upd					= \+\+ | \-\-
+@op_unary_inc					= \+\+
+@op_unary_dec					= \-\-
 
 -- identifier
 @identifier						= $namebegin $namechar*
@@ -280,19 +297,36 @@ xor_eq              / {ifLangs langsCXX}        {tk C_xor_eq}
 
 -- operators
 @op_assign		{tk C_op_assign }
+@op_assign_add	{tk C_op_assign_add }
+@op_assign_sub	{tk C_op_assign_sub }
+@op_assign_mul	{tk C_op_assign_mul }
+@op_assign_div	{tk C_op_assign_div }
+@op_assign_mod	{tk C_op_assign_mod }
+@op_assign_xor	{tk C_op_assign_xor }
+@op_assign_and	{tk C_op_assign_and }
+@op_assign_or	{tk C_op_assign_or }
+@op_assign_shl	{tk C_op_assign_shl }
+@op_assign_shr	{tk C_op_assign_shr }
 @op_pm			{tk C_op_pm		}
-@op_mul			{tk C_op_mul	}
+@op_ppm			{tk C_op_ppm	}
+@op_div			{tk C_op_div	}
+@op_mod			{tk C_op_mod	}
 @op_add			{tk C_op_add	}
-@op_shift		{tk C_op_shift	}
-@op_rel			{tk C_op_rel	}
+@op_sub			{tk C_op_sub	}
+@op_shl			{tk C_op_shl	}
+@op_shr			{tk C_op_shr	}
+@op_ge			{tk C_op_ge		}
+@op_le			{tk C_op_le		}
 @op_eq			{tk C_op_eq		}
+@op_neq			{tk C_op_neq	}
 @op_and			{tk C_op_and	}
 @op_xor			{tk C_op_xor	}
-@op_ior			{tk C_op_or		}
+@op_or			{tk C_op_or		}
 @op_log_and		{tk C_op_log_and}
-@op_log_ior		{tk C_op_log_or }
+@op_log_or		{tk C_op_log_or }
 @op_unary_not	{tk C_op_unary_not}
-@op_unary_upd	{tk C_op_unary_upd}
+@op_unary_inc	{tk C_op_unary_inc}
+@op_unary_dec	{tk C_op_unary_dec}
 
 -- identifier
 @identifier 	{tk C_name}
@@ -441,20 +475,37 @@ data TokenKind =
   | C_3dot			    -- ...
 
   -- Operator
-  | C_op_assign			-- assignment ops, *=, ...
-  | C_op_pm				-- pointer ops, ->*, ...
-  | C_op_mul			-- multipicative ops, *, ...
-  | C_op_add			-- additive ops, +, ...
-  | C_op_shift			-- shift ops, <<, ...
-  | C_op_rel			-- relational ops, <=, ...
-  | C_op_eq				-- equality ops, ==, ...
+  | C_op_assign			-- 
+  | C_op_assign_add		-- 
+  | C_op_assign_sub		-- 
+  | C_op_assign_mul		-- 
+  | C_op_assign_div		-- 
+  | C_op_assign_mod		-- 
+  | C_op_assign_xor		-- 
+  | C_op_assign_and		-- 
+  | C_op_assign_or		-- 
+  | C_op_assign_shl		-- 
+  | C_op_assign_shr		-- 
+  | C_op_pm				-- .*
+  | C_op_ppm			-- ->*
+  | C_op_div			-- /
+  | C_op_mod			-- %
+  | C_op_add			-- +
+  | C_op_sub			-- -
+  | C_op_shl			-- <<
+  | C_op_shr			-- >>
+  | C_op_ge				-- >=
+  | C_op_le				-- <=
+  | C_op_eq				-- ==
+  | C_op_neq			-- !=
   | C_op_and			-- &
   | C_op_xor			-- ^
   | C_op_or				-- |
   | C_op_log_and		-- &&
   | C_op_log_or			-- ||
   | C_op_unary_not		-- !
-  | C_op_unary_upd		-- prefix/postfix incr/decr update, ++, ...
+  | C_op_unary_inc		-- prefix/postfix ++
+  | C_op_unary_dec		-- prefix/postfix --
 
   -- Ident
   | C_name
@@ -493,13 +544,18 @@ data TokenKind =
   | C_notoken				-- nothing
   deriving (Eq,Enum,Show)
 
+-- | TokenKinds for operators (excluding the ambiguous ones like *, <, ...)
+tokkindAllOp :: [TokenKind]
+tokkindAllOp 
+  =  [C_op_assign .. C_op_unary_dec]
+
 -- | TokenKinds acceptable for preprocessing content, i.e. inbetween #if #else etc
 tokkindAllPrePr :: [TokenKind]
 tokkindAllPrePr 
   =  [C_name]
   ++ [C_lit_string .. C_lit_float]
   ++ [C_ocurly .. C_3dot]
-  ++ [C_op_assign .. C_op_unary_upd]
+  ++ tokkindAllOp
   ++ [C_auto .. C_while]
   ++ [C_alignas .. C_xor_eq]
 

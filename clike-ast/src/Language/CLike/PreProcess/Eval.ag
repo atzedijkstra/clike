@@ -1,0 +1,168 @@
+-------------------------------------------------------------------------------------------
+-- Evaluate an Expr during preprocessing
+-------------------------------------------------------------------------------------------
+
+MODULE {Language.CLike.PreProcess.Eval}
+  { evalExpr
+  
+  , Val(..)
+  
+  , EvalCache
+  }
+{
+-------------------------------------------------------------------------------------------
+import qualified Data.Map as Map
+-- import           Control.Monad
+import           Control.Monad.Trans.Error
+import           Data.Bits
+-------------------------------------------------------------------------------------------
+import           Language.CLike.AST
+import qualified Language.CLike.PreProcess.Env as E
+import           Language.CLike.PreProcess.State
+import qualified Language.CLike.Parser as P
+-------------------------------------------------------------------------------------------
+}
+
+INCLUDE "../AST/AbsSyn.ag"
+
+WRAPPER AGItfExpr
+
+{
+evalExpr :: EvalState -> Expr -> (EvalState, Either String Val)
+evalExpr es e
+  = (es_Syn_AGItfExpr r, ve_Syn_AGItfExpr r)
+  where r = wrap_AGItfExpr
+              (sem_AGItfExpr (AGItfExpr_AGItf e))
+              (Inh_AGItfExpr {es_Inh_AGItfExpr = es})
+}
+
+-------------------------------------------------------------------------------------------
+-- Evaluation value & state required
+-------------------------------------------------------------------------------------------
+
+{
+-- | Evaluation value
+data Val
+  = Val_Int		Integer
+  | Val_Str		LexString
+  | Val_Undef				-- ^ could not compute
+
+type ValOrError = Either String Val
+
+-- | Evaluation cache for names
+type EvalCache = Map.Map Name Val
+
+emptyEvalCache :: EvalCache
+emptyEvalCache = Map.empty
+
+-- | Evaluation state
+data EvalState = EvalState
+  { esEnv		:: E.Env
+  , esCache		:: EvalCache
+  }
+
+emptyEvalState :: EvalState
+emptyEvalState = EvalState E.empty emptyEvalCache
+
+}
+
+{
+instance Error ValOrError where
+  strMsg = Left
+}
+
+-------------------------------------------------------------------------------------------
+-- Evaluation
+-------------------------------------------------------------------------------------------
+
+{
+}
+
+ATTR AllExpr AGItfExpr [ | es: EvalState | ]
+
+SEM Name PrePrExpr
+  | *			loc			.	es			=	emptyEvalState
+
+{
+-- | Conversion
+b2i :: Bool -> Integer
+b2i False = 0
+b2i True = 1
+
+i2b :: Integer -> Bool
+i2b 0 = False
+i2b _ = True
+
+-- | Evaluate infix operator
+evalOpInfix :: Op -> ValOrError -> ValOrError -> ValOrError
+evalOpInfix op ve1 ve2 = do
+    v1 <- ve1
+    v2 <- ve2
+    case op of
+      C_star          -> intop (*) v1 v2
+      C_op_div        -> intop div v1 v2
+      C_op_mod        -> intop mod v1 v2
+      C_op_add        -> intop (+) v1 v2
+      C_op_sub        -> intop (-) v1 v2
+      C_op_shl        -> intop (\e1 e2 -> shiftL e1 (fromInteger e2)) v1 v2
+      C_op_shr        -> intop (\e1 e2 -> shiftR e1 (fromInteger e2)) v1 v2
+      C_oangle        -> relop (<) v1 v2
+      C_cangle        -> relop (>) v1 v2
+      C_op_ge         -> relop (>=) v1 v2
+      C_op_le         -> relop (<=) v1 v2
+      C_op_eq         -> relop (==) v1 v2
+      C_op_neq        -> relop (/=) v1 v2
+      C_op_and        -> intop (.&.) v1 v2
+      C_op_xor        -> intop xor v1 v2
+      C_op_or         -> intop (.|.) v1 v2
+      C_op_log_and    -> boolop (&&) v1 v2
+      C_op_log_or     -> boolop (||) v1 v2
+      _               -> strMsg $ "No eval for " ++ show op
+  where
+    intop :: (Integer -> Integer -> Integer) -> Val -> Val -> ValOrError
+    intop o (Val_Int l) (Val_Int r) = Right $ Val_Int $ l `o` r
+    intop o _           _           = strMsg "Operator args should be int"
+
+    relop :: (Integer -> Integer -> Bool) -> Val -> Val -> ValOrError
+    relop o = intop (\i1 i2 -> b2i $ i1 `o` i2)
+
+    boolop :: (Bool -> Bool -> Bool) -> Val -> Val -> ValOrError
+    boolop o = intop (\i1 i2 -> b2i $ i2b i1 `o` i2b i2)
+}
+
+ATTR Expr Lit AGItfExpr [ | | ve: ValOrError ]
+
+SEM Expr 
+  | OpInfix		lhs			.	ve			=	evalOpInfix @op @exprl.ve @exprr.ve
+  | Name		lhs			.	ve			=	case @nm.mbKey of
+  													Just n ->
+														case E.lookup n (esEnv @lhs.es) of
+															Just i -> do
+																e <- P.runExpr (E.niToks i)
+																strMsg ""
+															_ -> strMsg $ "No binding for "++ n
+													_ -> strMsg $ "Invalid Name"
+  | * - OpInfix Lit Name
+  				lhs			.	ve			=	strMsg "Eval error"
+
+SEM Lit
+  | Int			lhs			.	ve			= 	Right $ Val_Int $ (read @str :: Integer)
+  | Char		lhs			.	ve			= 	Right $ Val_Int $ toInteger $ fromEnum (read @str :: Char)
+  | String		lhs			.	ve			= 	Right $ Val_Str $ (read @str :: String)
+
+ATTR ExprL [ | | veL: {[ValOrError]} ]
+
+SEM ExprL
+  | Nil			lhs			.	veL			=	[]
+  | Cons		lhs			.	veL			=	@hd.ve : @tl.veL
+
+-------------------------------------------------------------------------------------------
+-- Key to be used in lookup
+-------------------------------------------------------------------------------------------
+
+ATTR Name [ | | mbKey: {Maybe LexString} ]
+
+SEM Name
+  | Id			lhs			.	mbKey		=	Just @id
+  | * - Id		lhs			.	mbKey		=	Nothing
+

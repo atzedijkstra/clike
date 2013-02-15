@@ -5,12 +5,16 @@
 #PATH=$HOME/Installs/wxHaskell-atze/cabal-dev/bin:$PATH
 #export PATH
 
+# turn these on/off to your need/liking
+cabal_cfg_opts="--cabal-lib-version=1.16.0.3"
+#cabal_clean_beforehand="cabal clean"
+
 cd clike-lexer
-cabal clean
-cabal --configure --cabal-lib-version=1.16.0.3
+${cabal_clean_beforehand}
+cabal configure ${cabal_cfg_opts}
 cd ..
 cd clike-ast
-cabal clean
-make
+${cabal_clean_beforehand}
+cabal configure ${cabal_cfg_opts}
 cd ..
 cabal-dev install ./clike-lexer ./clike-ast ./clike-examples
