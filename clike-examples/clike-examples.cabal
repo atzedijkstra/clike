@@ -1,4 +1,4 @@
-Name:                clike-lexer
+Name:                clike-examples
 Version:             0.1.0.0
 Copyright:           Utrecht University, Department of Information and Computing Sciences, Software Technology group
 Description:         C like language tools, a lexer
@@ -12,21 +12,21 @@ Maintainer:          atze@uu.nl
 Category:            Development
 Build-Type:          Simple
 Cabal-Version:       >= 1.8
-Extra-Source-Files:  Language/CLike/Lexer.x
+Extra-Source-Files:  
 
 Source-Repository head
   Type:              git
   Location:          git://github.com/atzedijkstra/clike.git
 
-Library
-  Hs-Source-Dirs:    src
-  Extensions:        
-  Exposed-Modules:   Language.CLike.Lexer
-  Other-Modules:     
+Executable test-lexer1
+  Hs-Source-Dirs:    test
+  Main-Is:           TestLexer1.hs
   Build-Depends:     base >= 4 && < 5,
-                     containers >= 0.4,
-                     array >= 0.4,
-                     bytestring >= 0.9,
-                     filepath >= 1.2,
-                     transformers >= 0.3.0
+                     clike-lexer >= 0.1.0.0
 
+Executable test-ast1
+  Hs-Source-Dirs:    test
+  Main-Is:           TestAst1.hs
+  Build-Depends:     base >= 4 && < 5,
+                     clike-lexer >= 0.1.0.0,
+                     clike-ast >= 0.1.0.0

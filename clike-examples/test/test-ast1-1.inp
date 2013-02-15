@@ -13,7 +13,7 @@ defs
 
 ifs
 
-#ifdef AAP
+#if defined( AAP)
 # define cl Clase
 #else
 # define cl Klase

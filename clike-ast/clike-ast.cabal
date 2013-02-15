@@ -34,9 +34,3 @@ Library
                      clike-lexer >= 0.1.0.0,
                      uu-parsinglib >= 2.7.4
 
-Executable test-ast1
-  Hs-Source-Dirs:    test
-  Main-Is:           Test1.hs
-  Build-Depends:     base >= 4 && < 5,
-                     clike-lexer >= 0.1.0.0,
-                     clike-ast >= 0.1.0.0

@@ -98,7 +98,7 @@ pTkRaw tk = pSym (mkToken tk)
 
 -- | Token parser, extraction of relevant info for further processing
 pTk :: TokenKind -> CP PosString
-pTk tk = (\t -> (tokPos t, maybe "" id $ tokPayload t)) <$> pTkRaw tk
+pTk tk = (\t -> (tokPos t, tokPayload t)) <$> pTkRaw tk
 
 -- | Token parser, only position info
 pTkP :: TokenKind -> CP Pos
@@ -123,6 +123,7 @@ pPacked' :: IsParser p => p b1 -> p b2 -> p (b1->a) -> p a
 pPacked' l r x = flip ($) <$> l <*>  x <* r
 
 pParens  = pPacked  (pTk  C_oparen) (pTk C_cparen)
+pParens' = pPacked' (pTkP C_oparen) (pTk C_cparen)
 
 pAngles  = pPacked  (pTk  C_oangle) (pTk C_cangle)
 
@@ -283,10 +284,11 @@ pModulePrePr :: CP ModulePrePr
     pExprPostfix :: CP Expr
     pExprPostfix
       =   pExprPrimary
-          <**> (   pure id
-               <|> (\i e -> unPos Expr_Index e i) <$> pBracks pExpr
-               )
+          <**> ((\ss e -> foldl (flip ($)) e ss) <$> pList pSuffix)
       -- <|> ...
+      where pSuffix
+              =   (\i e -> unPos Expr_Index e i) <$> pBracks pExpr
+              <|> (\a e -> unPos Expr_Call e a) <$> pParens' pExprInitializerList
 
     pExprUnary :: CP Expr
     pExprUnary
@@ -318,11 +320,15 @@ pModulePrePr :: CP ModulePrePr
                <|> (\(p,o) r l -> Expr_OpInfix p o l r) <$> pTk C_op_assign <*> pExprInitializerClause
                )
 
+    pExprInitializerList :: CP (Pos -> Expr)
+    pExprInitializerList
+      =   (\l d p -> Expr_Init p l d) <$> pList1Sep pComma pExprInitializerClause <*> pOpt3Dot
+
     pExprInitializerClause :: CP Expr
     pExprInitializerClause
       =   pExprAssign
       <|> pCurlys'
-            (   (\l d p -> Expr_Init p l d) <$> pList1Sep pComma pExprInitializerClause <*> pOpt3Dot <* pOptComma
+            (   pExprInitializerList <* pOptComma
             <|> pure (\p -> Expr_Init p [] False)
             )
 

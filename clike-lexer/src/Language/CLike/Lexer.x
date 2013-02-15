@@ -525,18 +525,20 @@ data Token = Token
   { tokCx 		:: !Int		-- context/state
   , tokPos 		:: !AlexPosn
   , tokKind 	:: !TokenKind
-  , tokPayload 	:: (Maybe LexString)
+  , tokPayload 	:: LexString
   }
-  deriving (Show)
 
 instance Eq Token where
   t1 == t2 = tokKind t1 == tokKind t2
 
+instance Show Token where
+  show t = tokPayload t ++ "/" ++ show (tokKind t)
+
 emptyToken :: Token
-emptyToken = Token 0 noPos C_eof Nothing
+emptyToken = Token 0 noPos C_eof ""
 
 noToken :: Token
-noToken = Token 0 noPos C_notoken Nothing
+noToken = emptyToken {tokKind = C_notoken}
 
 -- | Make a simple token, intended for use outside, by parser combinator lib
 mkToken :: TokenKind -> Token
@@ -544,10 +546,7 @@ mkToken tk = emptyToken {tokKind = tk}
 
 -- | Concat payload
 tokConcat :: Token -> Token -> Token
-tokConcat t1@(Token {tokPayload=Just s1})    (Token {tokPayload=Just s2}) = t1 {tokPayload = Just $ s1 ++ s2}
-tokConcat t1@(Token {tokPayload=Just _ })    _                            = t1
-tokConcat _                               t2@(Token {tokPayload=Just _ }) = t2
-tokConcat _                                  _                            = error "tokConcat"
+tokConcat t1@(Token {tokPayload=s1}) (Token {tokPayload=s2}) = t1 {tokPayload = s1 ++ s2}
 
 ------------------------------------------------------------------------------------------------
 -- Hooks used by machinery
@@ -565,13 +564,13 @@ alexEOF = do
 tk :: TokenKind -> AlexAction Token
 tk t (p, _, _, input) len = do
   c <- alexGetStartCode
-  return (Token c p t (Just s))
+  return (Token c p t s)
  where s = take len input
 
 tkStr :: (LexString -> TokenKind) -> AlexAction Token
 tkStr t (p, _, _, input) len = do
   c <- alexGetStartCode
-  return (Token c p (t s) (Just s))
+  return (Token c p (t s) s)
  where s = take len input
 
 {-
@@ -714,7 +713,7 @@ alexInjectError next = do
   case ausErrorAccum us of
     Just (p,s) -> do ausPut $ us {ausErrorAccum = Nothing}
                      c <- alexGetStartCode
-                     return (Token c p C_unknown (Just s))
+                     return (Token c p C_unknown s)
     _          -> next
 
 -- | Accumulate 1 char from erroneous input

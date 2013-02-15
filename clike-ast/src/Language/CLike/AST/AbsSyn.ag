@@ -87,7 +87,7 @@ DATA Expr
   | Index				expr			: Expr		-- postfix-expression [ expression ]
   						inx				: Expr
   | Call				expr			: Expr		-- postfix-expression ( expression-list opt)
-  						args			: ExprL
+  						args			: Expr		-- will be an Init
   | IfThenElse 			exprCond		: Expr		-- logical-or-expression ? expression : assignment-expression
   						exprThen		: Expr
   						exprElse		: Expr

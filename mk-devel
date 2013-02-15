@@ -13,4 +13,4 @@ cd clike-ast
 cabal clean
 make
 cd ..
-cabal-dev install ./clike-lexer ./clike-ast
+cabal-dev install ./clike-lexer ./clike-ast ./clike-examples
