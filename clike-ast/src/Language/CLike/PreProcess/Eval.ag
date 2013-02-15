@@ -50,7 +50,7 @@ data Val
 type ValOrError = Either String Val
 
 -- | Evaluation cache for names
-type EvalCache = Map.Map Name Val
+type EvalCache = Map.Map EnvKey Val
 
 emptyEvalCache :: EvalCache
 emptyEvalCache = Map.empty
@@ -134,14 +134,14 @@ ATTR Expr Lit AGItfExpr [ | | ve: ValOrError ]
 
 SEM Expr 
   | OpInfix		lhs			.	ve			=	evalOpInfix @op @exprl.ve @exprr.ve
-  | Name		lhs			.	ve			=	case @nm.mbKey of
+  | Name		lhs			.	(es,ve)		=	case @nm.mbKey of
   													Just n ->
 														case E.lookup n (esEnv @lhs.es) of
 															Just i -> do
 																e <- P.runExpr (E.niToks i)
 																strMsg ""
-															_ -> strMsg $ "No binding for "++ n
-													_ -> strMsg $ "Invalid Name"
+															_ -> (@lhs.es,strMsg $ "No binding for "++ n)
+													_ -> (@lhs.es,strMsg $ "Invalid Name")
   | * - OpInfix Lit Name
   				lhs			.	ve			=	strMsg "Eval error"
 

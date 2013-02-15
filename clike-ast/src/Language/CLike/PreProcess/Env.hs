@@ -6,6 +6,7 @@ module Language.CLike.PreProcess.Env
   ( NmInfo(..)
   , emptyNmInfo
   
+  , EnvKey
   , Env
   
   , insert
@@ -41,8 +42,10 @@ emptyNmInfo = NmInfo
 -- Environment for names
 -------------------------------------------------------------------------------------------
 
+type EnvKey = LexString
+
 -- | Environment
-type Env = SGam LexString NmInfo
+type Env = SGam EnvKey NmInfo
 
 -- | Insert
 insert n i g = sgamSingleton n i `sgamUnion` g
