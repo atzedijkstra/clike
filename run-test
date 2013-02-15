@@ -1,0 +1,8 @@
+#!/bin/sh
+
+echo =========================== lexer: lexer ===========================
+cabal-dev/bin/test-lexer1 clike-examples/test/test-lexer1-1.inp
+echo =========================== ast: lexer ===========================
+cabal-dev/bin/test-lexer1 clike-examples/test/test-ast1-1.inp
+echo =========================== ast: ast ===========================
+cabal-dev/bin/test-ast1 clike-examples/test/test-ast1-1.inp
