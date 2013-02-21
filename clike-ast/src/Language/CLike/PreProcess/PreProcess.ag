@@ -21,10 +21,11 @@ import           Data.Lens.Strict
 import           Control.Monad
 import           Control.Monad.State.Strict
 import qualified UHC.Util.FastSeq as Seq
+import qualified Data.ListLike as LL
 -------------------------------------------------------------------------------------------
 import           Language.CLike.AST
 import qualified Language.CLike.PreProcess.Env as E
-import           Language.CLike.PreProcess.State
+import           Language.CLike.PreProcess.Types
 import           Language.CLike.PreProcess.Eval
 import           Language.CLike.Parser
 -------------------------------------------------------------------------------------------
@@ -79,13 +80,13 @@ prePr ppl = do
     run
     access ppsToks
   where
-    -- driver, maintaining state, stack, result etc
+    -- driver loop, maintaining state, stack, result etc
     run = do
       pps <- get
       case pps of
-        PrePrState {_ppsStack = []} -> do
+        PrePrState {_ppsStack = []} ->
           return ()
-        PrePrState {_ppsStack = (PrePrCont_Next {_ppcontNext = []}:_)} -> do
+        PrePrState {_ppsStack = (PrePrCont_Next {_ppcontNext = []}:_)} ->
           pop
         PrePrState {_ppsStack = (PrePrCont_Next {}:_)} -> do
           ppl <- popGet
@@ -94,7 +95,7 @@ prePr ppl = do
                  push aft
                  prepr bef
                  case here of
-                   PrePr_Include        _ i -> include (init $ tail i)
+                   PrePr_Include        _ i -> include (LL.init $ LL.tail i)
                    PrePr_IfThenElse _ c t e -> do
                      es <- access ppsEs
                      case evalPrePrExprToBool es c of
@@ -110,6 +111,7 @@ prePr ppl = do
       ppsToks %= (`Seq.union` toks)
       ppsErrs %= (`Seq.union` errs)
       return ()
+    -- the side-effect free part
     prepr ppl = do
       pps <- get
       let (pps',toks,errs) = prePrNoSideEffect pps ppl
@@ -126,7 +128,7 @@ prePr ppl = do
       popGet
       return ()
     
-    -- include a file which yields sub tokens etc
+    -- include a file which yields tokens etc
     include f = do
       r <- liftIO $ parsePrePrFile f
       case r of
@@ -134,9 +136,9 @@ prePr ppl = do
         Right ppl -> push ppl
 
 -- | Run preprocessor in IO
-runPrePr :: [PrePr] -> IO (Seq.Seq Token, Seq.Seq Err)
-runPrePr ppl = do
-  (toks,s) <- runStateT (prePr ppl) emptyPrePrState
+runPrePr :: PrePrOpts -> [PrePr] -> IO (Seq.Seq Token, Seq.Seq Err)
+runPrePr opts ppl = do
+  (toks,s) <- runStateT (prePr ppl) (ppsOpts ^= opts $ emptyPrePrState)
   return (toks, s ^. ppsErrs)
 }
 

@@ -2,21 +2,32 @@
 -- | State for running the preprocessor
 -------------------------------------------------------------------------------------------
 
-module Language.CLike.PreProcess.State
-  ( PrePrCont(..)
-  , ppcontNext
-  
-  , PrePrState(..)
-  , ppsEs, ppsErrs, ppsStack, ppsToks
+module Language.CLike.PreProcess.Types
+  ( 
+  -- * Preprocessing state
+    PrePrState(..)
+  , ppsEs, ppsErrs, ppsStack, ppsToks, ppsOpts
   , emptyPrePrState
   
+  -- * Evaluation state
   , EvalState(..)
   , emptyEvalState
   , esEnv, esCache
   
+  -- * Options
+  , PrePrOpts(..)
+  , ppoptsIncludePath
+  , emptyPrePrOpts
+  
+  -- * Evaluation value
   , Val(..)
 
+  -- * Evaluation cache (not yet used)
   , EvalCache
+  
+  -- * Internal only, continuation maintained in a stack
+  , PrePrCont(..)
+  , ppcontNext
   
   ) where
 
@@ -30,6 +41,22 @@ import qualified UHC.Util.FastSeq as Seq
 import           Language.CLike.AST
 import qualified Language.CLike.PreProcess.Env as E
 -------------------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------------------
+-- Options to the preprocessor
+-------------------------------------------------------------------------------------------
+
+data PrePrOpts = PrePrOpts
+  { _ppoptsIncludePath		:: [FilePath] 	-- ^ search path for include, first of which is allways current dir
+  }
+  deriving (Typeable)
+
+emptyPrePrOpts :: PrePrOpts
+emptyPrePrOpts = PrePrOpts
+  { _ppoptsIncludePath		= ["."]
+  }
+
+makeLens ''PrePrOpts
 
 -------------------------------------------------------------------------------------------
 -- State: evaluation
@@ -78,6 +105,7 @@ data PrePrState = PrePrState
   , _ppsErrs		:: Seq.Seq Err		-- ^ Accumulated errors
   , _ppsStack		:: [PrePrCont]		-- ^ stack of continuations
   , _ppsToks		:: Seq.Seq Token	-- ^ already gathered tokens
+  , _ppsOpts		:: PrePrOpts		-- ^ options to preprocessor
   }
   deriving (Typeable)
 
@@ -88,7 +116,12 @@ emptyPrePrState = PrePrState
   , _ppsErrs		= Seq.empty
   , _ppsStack		= []
   , _ppsToks 		= Seq.empty
+  , _ppsOpts		= emptyPrePrOpts
   }
 
 makeLens ''PrePrState
+
+-------------------------------------------------------------------------------------------
+-- Preprocessor options parsing
+-------------------------------------------------------------------------------------------
 

@@ -27,7 +27,8 @@ module Language.CLike.Lexer
 ------------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------------
-import Data.Bits
+import           Data.Bits
+import qualified Data.ListLike as LL
 -- import Data.Word
 -- import Control.Monad.Trans.State.Strict
 ------------------------------------------------------------------------------------------------
@@ -595,7 +596,7 @@ mkToken tk = emptyToken {tokKind = tk}
 
 -- | Concat payload
 tokConcat :: Token -> Token -> Token
-tokConcat t1@(Token {tokPayload=s1}) (Token {tokPayload=s2}) = t1 {tokPayload = s1 ++ s2}
+tokConcat t1@(Token {tokPayload=s1}) (Token {tokPayload=s2}) = t1 {tokPayload = s1 `LL.append` s2}
 
 ------------------------------------------------------------------------------------------------
 -- Hooks used by machinery
@@ -620,7 +621,7 @@ tkStr :: (LexString -> TokenKind) -> AlexAction Token
 tkStr t (p, _, _, input) len = do
   c <- alexGetStartCode
   return (Token c p (t s) s)
- where s = take len input
+ where s = LL.take len input
 
 {-
 -- ignore this token
@@ -769,7 +770,7 @@ alexInjectError next = do
 alexAccum1ErrorChar :: AlexAction ()
 alexAccum1ErrorChar (p,_,_,input) len = do
   ausModify $ \us -> let i = take len input
-                     in  us {ausErrorAccum = Just $ maybe (p,i) (\(p,s) -> (p, s ++ i)) $ ausErrorAccum us}
+                     in  us {ausErrorAccum = Just $ maybe (p,i) (\(p,s) -> (p, s `LL.append` i)) $ ausErrorAccum us}
 
 ------------------------------------------------------------------------------------------------
 -- Flags

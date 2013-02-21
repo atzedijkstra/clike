@@ -30,7 +30,8 @@ Library
                      Language.CLike.Parser,
                      Language.CLike.PreProcess.PreProcess,
                      Language.CLike.PreProcess.Env,
-                     Language.CLike.PreProcess.State,
+                     Language.CLike.PreProcess.Types,
+                     Language.CLike.PreProcess.ParseOpts,
                      Language.CLike.PreProcess
   Other-Modules:     Language.CLike.PreProcess.Eval
   Build-Depends:     base >= 4 && < 5,
@@ -43,5 +44,7 @@ Library
                      uuagc-cabal >= 1.0.3.0,
                      clike-lexer >= 0.1.0.0,
                      uu-parsinglib >= 2.7.4,
-                     uhc-util >= 0.1.1.0
+                     uhc-util >= 0.1.1.0,
+                     ListLike >= 3.1.7.0,
+                     optparse-applicative >= 0.5.2
 

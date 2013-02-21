@@ -20,7 +20,7 @@ import           Data.Lens.Common
 -- import qualified UHC.Util.FastSeq as Seq
 -------------------------------------------------------------------------------------------
 import           Language.CLike.AST
-import           Language.CLike.PreProcess.State
+import           Language.CLike.PreProcess.Types
 import qualified Language.CLike.PreProcess.Env as E
 import qualified Language.CLike.Parser as P
 -------------------------------------------------------------------------------------------

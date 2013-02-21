@@ -30,4 +30,5 @@ Executable test-ast1
   Build-Depends:     base >= 4 && < 5,
                      clike-lexer >= 0.1.0.0,
                      clike-ast >= 0.1.0.0,
-                     uhc-util >= 0.1.1.0
+                     uhc-util >= 0.1.1.0,
+                     optparse-applicative >= 0.5.2

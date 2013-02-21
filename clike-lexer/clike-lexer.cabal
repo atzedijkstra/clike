@@ -28,5 +28,6 @@ Library
                      array >= 0.4,
                      bytestring >= 0.9,
                      filepath >= 1.2,
-                     transformers >= 0.3.0
+                     transformers >= 0.3.0,
+                     ListLike >= 3.1.7.0
 
