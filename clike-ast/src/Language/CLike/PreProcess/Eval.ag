@@ -4,30 +4,35 @@
 
 MODULE {Language.CLike.PreProcess.Eval}
   { evalExpr
+  , evalPrePrExprToBool
   
-  , Val(..)
+  , valToBool
   
-  , EvalCache
+  , nmKey
   }
 {
 -------------------------------------------------------------------------------------------
 import qualified Data.Map as Map
--- import           Control.Monad
+import           Data.Maybe
 import           Control.Monad.Trans.Error
 import           Data.Bits
+import           Data.Lens.Common
+-- import qualified UHC.Util.FastSeq as Seq
 -------------------------------------------------------------------------------------------
 import           Language.CLike.AST
-import qualified Language.CLike.PreProcess.Env as E
 import           Language.CLike.PreProcess.State
+import qualified Language.CLike.PreProcess.Env as E
 import qualified Language.CLike.Parser as P
 -------------------------------------------------------------------------------------------
 }
 
 INCLUDE "../AST/AbsSyn.ag"
+INCLUDE "../AST/NameKey.ag"
 
 WRAPPER AGItfExpr
 
 {
+-- | Evaluate an Expr using a state
 evalExpr :: EvalState -> Expr -> (EvalState, Either String Val)
 evalExpr es e
   = (es_Syn_AGItfExpr r, ve_Syn_AGItfExpr r)
@@ -36,34 +41,30 @@ evalExpr es e
               (Inh_AGItfExpr {es_Inh_AGItfExpr = es})
 }
 
+WRAPPER AGItfPrePrExpr
+
+{
+-- | Evaluate an PrePrExpr using a state
+evalPrePrExprToBool :: EvalState -> PrePrExpr -> (EvalState, Either String Bool)
+evalPrePrExprToBool es e
+  = (es_Syn_AGItfPrePrExpr r, be_Syn_AGItfPrePrExpr r)
+  where r = wrap_AGItfPrePrExpr
+              (sem_AGItfPrePrExpr (AGItfPrePrExpr_AGItf e))
+              (Inh_AGItfPrePrExpr {es_Inh_AGItfPrePrExpr = es})
+}
+
 -------------------------------------------------------------------------------------------
 -- Evaluation value & state required
 -------------------------------------------------------------------------------------------
 
 {
--- | Evaluation value
-data Val
-  = Val_Int		Integer
-  | Val_Str		LexString
-  | Val_Undef				-- ^ could not compute
+-- | Interpret as Bool, False returned also for non int
+valToBool :: Val -> Bool
+valToBool (Val_Int i) = i2b i
+valToBool _           = False
 
-type ValOrError = Either String Val
-
--- | Evaluation cache for names
-type EvalCache = Map.Map EnvKey Val
-
-emptyEvalCache :: EvalCache
-emptyEvalCache = Map.empty
-
--- | Evaluation state
-data EvalState = EvalState
-  { esEnv		:: E.Env
-  , esCache		:: EvalCache
-  }
-
-emptyEvalState :: EvalState
-emptyEvalState = EvalState E.empty emptyEvalCache
-
+type ValOrError  = Either String Val
+type BoolOrError = Either String Bool
 }
 
 {
@@ -78,9 +79,9 @@ instance Error ValOrError where
 {
 }
 
-ATTR AllExpr AGItfExpr [ | es: EvalState | ]
+ATTR AllExpr PrePrExpr AGItfExpr AGItfPrePrExpr [ | es: EvalState | ]
 
-SEM Name PrePrExpr
+SEM Name PrePr
   | *			loc			.	es			=	emptyEvalState
 
 {
@@ -136,12 +137,13 @@ SEM Expr
   | OpInfix		lhs			.	ve			=	evalOpInfix @op @exprl.ve @exprr.ve
   | Name		lhs			.	(es,ve)		=	case @nm.mbKey of
   													Just n ->
-														case E.lookup n (esEnv @lhs.es) of
-															Just i -> do
-																e <- P.runExpr (E.niToks i)
-																strMsg ""
-															_ -> (@lhs.es,strMsg $ "No binding for "++ n)
-													_ -> (@lhs.es,strMsg $ "Invalid Name")
+														case E.lookup n (@lhs.es ^. esEnv) of
+															Just i ->
+																case P.parseExpr (E.niToks i) of
+															 		Left m -> (@lhs.es, strMsg m)
+																	Right e -> evalExpr @lhs.es e
+															_ -> (@lhs.es, strMsg $ "No binding for "++ n)
+													_ -> (@lhs.es, strMsg $ "Invalid Name")
   | * - OpInfix Lit Name
   				lhs			.	ve			=	strMsg "Eval error"
 
@@ -149,6 +151,7 @@ SEM Lit
   | Int			lhs			.	ve			= 	Right $ Val_Int $ (read @str :: Integer)
   | Char		lhs			.	ve			= 	Right $ Val_Int $ toInteger $ fromEnum (read @str :: Char)
   | String		lhs			.	ve			= 	Right $ Val_Str $ (read @str :: String)
+  | Float		lhs			.	ve			= 	strMsg "No Float lit"
 
 ATTR ExprL [ | | veL: {[ValOrError]} ]
 
@@ -157,12 +160,18 @@ SEM ExprL
   | Cons		lhs			.	veL			=	@hd.ve : @tl.veL
 
 -------------------------------------------------------------------------------------------
--- Key to be used in lookup
+-- IfThenElse condition evaluation
 -------------------------------------------------------------------------------------------
 
-ATTR Name [ | | mbKey: {Maybe LexString} ]
+ATTR PrePrExpr AGItfPrePrExpr [ | | be: BoolOrError ]
 
-SEM Name
-  | Id			lhs			.	mbKey		=	Just @id
-  | * - Id		lhs			.	mbKey		=	Nothing
+SEM PrePrExpr
+  | Expr        lhs         .   be       	=   fmap valToBool @expr.ve
+  | IsDefined IsNotDefined
+                loc         .   mbNmInfo    =   do k <- @nm.mbKey
+                                                   E.lookup k (@lhs.es ^. esEnv)
+  | IsDefined   lhs         .   be      	=   Right $ isJust @mbNmInfo
+  | IsNotDefined
+                lhs         .   be      	=   Right $ isNothing @mbNmInfo
+
 

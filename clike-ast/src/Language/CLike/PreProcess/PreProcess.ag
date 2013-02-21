@@ -2,90 +2,206 @@
 -- Preprocess a module
 -------------------------------------------------------------------------------------------
 
+
 MODULE {Language.CLike.PreProcess.PreProcess}
-  { preprocessModule
+  { prePr
+  , runPrePr
+
+  -- * Re-export
+  , emptyPrePrState
   }
 {
 -------------------------------------------------------------------------------------------
+import           Control.Category
+import           Prelude hiding ((.),id)
+import           Data.Maybe
+import           Data.Either
+import           Data.Lens.Common
+import           Data.Lens.Strict
+import           Control.Monad
+import           Control.Monad.State.Strict
+import qualified UHC.Util.FastSeq as Seq
 -------------------------------------------------------------------------------------------
 import           Language.CLike.AST
 import qualified Language.CLike.PreProcess.Env as E
 import           Language.CLike.PreProcess.State
+import           Language.CLike.PreProcess.Eval
+import           Language.CLike.Parser
 -------------------------------------------------------------------------------------------
 }
 
 INCLUDE "../AST/AbsSyn.ag"
+INCLUDE "../AST/NameKey.ag"
 
 WRAPPER AGItfPrePr
 
 {
-preprocessModule :: ModulePrePr -> [Token]
-preprocessModule m
-  = toks_Syn_AGItfPrePr r
+-- | Preprocess a guaranteed side-effect free list of PrePr into new Tokens
+prePrNoSideEffect :: PrePrState -> [PrePr] -> (PrePrState, Seq.Seq Token, Seq.Seq Err)
+prePrNoSideEffect st m
+  = (pps_Syn_AGItfPrePr r, toks_Syn_AGItfPrePr r, errs_Syn_AGItfPrePr r)
   where r = wrap_AGItfPrePr
               (sem_AGItfPrePr (AGItfPrePr_AGItf m))
-              (Inh_AGItfPrePr {})
+              (Inh_AGItfPrePr
+                { pps_Inh_AGItfPrePr = st
+                })
 }
+
+-------------------------------------------------------------------------------------------
+-- Split up until next preprocessing control and remainder
+-------------------------------------------------------------------------------------------
+
+{
+-- | Split until next PrePr control which requires either IO or continuation like behavior
+prePrLSplit :: [PrePr] -> Maybe ([PrePr],PrePr,[PrePr])
+prePrLSplit ppl
+  = spl [] ppl
+  where spl acc (h:t) = case h of
+            PrePr_IfThenElse _ _ _ _ -> fnd
+            PrePr_Include    _ _     -> fnd
+            _                        -> spl (h : acc) t
+          where fnd = Just (reverse acc, h, t)
+        spl _    []   = Nothing
+}
+
+-------------------------------------------------------------------------------------------
+-- Top level driver
+-------------------------------------------------------------------------------------------
+
+{
+-- | Preprocessor monad
+type PrePrM a = StateT PrePrState IO a
+
+-- | Run the preprocessor on a list of PrePr, dealing with include and choice
+prePr :: [PrePr] -> PrePrM (Seq.Seq Token)
+prePr ppl = do
+    push ppl
+    run
+    access ppsToks
+  where
+    -- driver, maintaining state, stack, result etc
+    run = do
+      pps <- get
+      case pps of
+        PrePrState {_ppsStack = []} -> do
+          return ()
+        PrePrState {_ppsStack = (PrePrCont_Next {_ppcontNext = []}:_)} -> do
+          pop
+        PrePrState {_ppsStack = (PrePrCont_Next {}:_)} -> do
+          ppl <- popGet
+          case prePrLSplit ppl of
+            Just (bef,here,aft) -> do
+                 push aft
+                 prepr bef
+                 case here of
+                   PrePr_Include        _ i -> include (init $ tail i)
+                   PrePr_IfThenElse _ c t e -> do
+                     es <- access ppsEs
+                     case evalPrePrExprToBool es c of
+                       (_  , Left err) -> add Seq.empty (Seq.singleton err)
+                       (es', Right b ) -> do ppsEs != es'
+                                             push (if b then t else e)
+                 run
+            _ -> do prepr ppl
+                    run
+    
+    -- append token/error result
+    add toks errs = do
+      ppsToks %= (`Seq.union` toks)
+      ppsErrs %= (`Seq.union` errs)
+      return ()
+    prepr ppl = do
+      pps <- get
+      let (pps',toks,errs) = prePrNoSideEffect pps ppl
+      put pps'
+      add toks errs
+    
+    -- push, pop etc
+    push ppl = do
+      ppsStack %= ([PrePrCont_Next ppl] ++)
+      return ()
+    popGet = do
+      ppsStack %%= \(PrePrCont_Next {_ppcontNext = ppl}:s) -> (ppl,s)
+    pop = do
+      popGet
+      return ()
+    
+    -- include a file which yields sub tokens etc
+    include f = do
+      r <- liftIO $ parsePrePrFile f
+      case r of
+        Left errs -> add Seq.empty (Seq.fromList errs)
+        Right ppl -> push ppl
+
+-- | Run preprocessor in IO
+runPrePr :: [PrePr] -> IO (Seq.Seq Token, Seq.Seq Err)
+runPrePr ppl = do
+  (toks,s) <- runStateT (prePr ppl) emptyPrePrState
+  return (toks, s ^. ppsErrs)
+}
+
+-------------------------------------------------------------------------------------------
+-- Errors
+-------------------------------------------------------------------------------------------
+
+ATTR AllPrePr AGItfPrePr [ | | errs USE {`Seq.union`} {Seq.empty} : {Seq.Seq Err} ]
+
+-------------------------------------------------------------------------------------------
+-- State
+-------------------------------------------------------------------------------------------
+
+ATTR AllPrePr AllExpr AllName AGItfPrePr [ | pps: PrePrState | ]
+
+SEM AGItfExpr AGItfName AGItfPrePrExpr
+  | *           loc         .   pps         =   emptyPrePrState
+
+SEM PrePr
+  -- a definition adds a name, for now a parameterized use is ignored
+  | Define      lhs         .   pps         =   (esEnv . ppsEs) ^%= (E.insert (maybe "??" id $ @nm.mbKey) (E.emptyNmInfo {E.niToks= @body})) $ @lhs.pps
+  | Undef       lhs         .   pps         =   (esEnv . ppsEs) ^%= (E.delete (maybe "??" id $ @nm.mbKey)) $ @lhs.pps
+
+-------------------------------------------------------------------------------------------
+-- IfThenElse condition evaluation
+-------------------------------------------------------------------------------------------
+
+{-
+ATTR PrePrExpr [ | | isTrue: Bool ]
+
+SEM PrePrExpr
+  | Expr        (loc.es,loc.evalRes)        =   evalExpr (@lhs.pps ^. ppsEs) @expr.self
+                (loc.errs,lhs.isTrue)       =   either (\s -> (Seq.empty,False)) (\v -> (Seq.empty,valToBool v)) @evalRes
+                expr        .   pps         =   ppsEs ^= @es $ @lhs.pps
+  | IsDefined IsNotDefined
+                loc         .   mbNmInfo    =   do k <- @nm.mbKey
+                                                   E.lookup k (@lhs.pps ^. ppsEs ^. esEnv)
+  | IsDefined   lhs         .   isTrue      =   isJust @mbNmInfo
+  | IsNotDefined
+                lhs         .   isTrue      =   isNothing @mbNmInfo
+-}
 
 -------------------------------------------------------------------------------------------
 -- Newly generated tokens
 -------------------------------------------------------------------------------------------
 
-ATTR AllPrePr AGItfPrePr ModulePrePr [ | | toks USE {++} {[]} : {[Token]} ]
+ATTR AllPrePr AGItfPrePr [ | | toks USE {`Seq.union`} {Seq.empty} : {Seq.Seq Token} ]
 
 SEM PrePr
-  | Toks		lhs			.	toks		=	@toks
+  -- plain tokens are just returned, not preprocessed, for now
+  | Toks        lhs         .   toks        =   Seq.fromList @toks
+
+{-
+  -- no tokens for preprocessing cmds
+  | Define      lhs         .   toks        =   Seq.empty
+
+  -- evaluate and decide which replacement tokens to take
+  | IfThenElse  lhs         .   toks        =   if @condExpr.isTrue then @preprThen.toks else @preprElse.toks
+-}
 
 -------------------------------------------------------------------------------------------
--- Unique ids, for the graph representation
+-- Self
 -------------------------------------------------------------------------------------------
 
 {-
-ATTR AllBaseNT Module [ | uniq: UID | ]
-
-SEM AGItf
-  | AGItf       loc         .   uniq        = 0
-
-SEM BnDecl
-  | Var         loc         .   vUniq       : UNIQUEREF uniq
-
--------------------------------------------------------------------------------------------
--- Threaded state map for holding generated UIDs for vars
--------------------------------------------------------------------------------------------
-
-ATTR AllBaseNT Module [ | var2UidMp: {OnceAddMp Nm UID} | ]
-
-SEM AGItf
-  | AGItf       loc         .   var2UidMp   = Map.empty
-
-SEM BnDecl
-  | Var         (loc.vUID,aspects.var2UidMp)= onceAddMpAdd @nm @vUniq @lhs.var2UidMp
-
--------------------------------------------------------------------------------------------
--- Threaded state graph for network gathering var defs
--------------------------------------------------------------------------------------------
-
-ATTR AllBaseNT Module [ | netwVar: BSNetwork | ]
-
-SEM AGItf
-  | AGItf       loc         .   netwVar     = emptyBSNetwork
-
-SEM BnDecl
-  | Var         aspects     .   netwVar     = HB.addLabeledVertex (show @nm) (HB.Vertex @vUID) () @lhs.netwVar
-
--------------------------------------------------------------------------------------------
--- Translation of gathered network to hbayes encoding, using the 'official' primitives 
--------------------------------------------------------------------------------------------
-
-ATTR AGItf [ | | hbayesNetwork: {HB.SBN HB.CPT} ]
-
-SEM AGItf
-  | AGItf       loc			.	netwFinal	= @module.netwVar
-  				lhs         .   hbayesNetwork
-                                            = HB.execBN $ do
-                                                let verts = HB.allVertices @netwFinal
-                                                vars <- forM verts
-                                                             (\v -> HB.variableWithSize (fromJust $ HB.vertexLabel @netwFinal v) 2)
-                                                return ()
-
+ATTR AllExpr AllLit AllName [ | | self: SELF ]
 -}
+

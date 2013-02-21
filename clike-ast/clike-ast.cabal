@@ -15,6 +15,7 @@ Cabal-Version:       >= 1.8
 Extra-Source-Files:  uuagc_options,
                      Language/CLike/AST.ag,
                      Language/CLike/AST/AbsSyn.ag,
+                     Language/CLike/AST/NameKey.ag,
                      Language/CLike/PreProcess/PreProcess.ag,
                      Language/CLike/PreProcess/Eval.ag
 
@@ -24,7 +25,7 @@ Source-Repository head
 
 Library
   Hs-Source-Dirs:    src
-  Extensions:        TypeSynonymInstances, FlexibleInstances
+  Extensions:        TypeSynonymInstances, FlexibleInstances, NoMonomorphismRestriction, DeriveDataTypeable, TemplateHaskell
   Exposed-Modules:   Language.CLike.AST,
                      Language.CLike.Parser,
                      Language.CLike.PreProcess.PreProcess,
@@ -35,6 +36,9 @@ Library
   Build-Depends:     base >= 4 && < 5,
                      containers >= 0.4.0.0,
                      transformers >= 0.3.0.0,
+                     mtl >= 2.1.0,
+                     data-lens >= 2.0.1,
+                     data-lens-template >= 2.1,
                      uuagc >= 0.9.40.3,
                      uuagc-cabal >= 1.0.3.0,
                      clike-lexer >= 0.1.0.0,

@@ -66,7 +66,7 @@ $q_char     = $printable_no_nl # [$whitechar "]
 
 -- integer literal
 $octal_digit			= $octit
-@octal_literal			= 0 $octal_digit+
+@octal_literal			= 0 $octal_digit*
 $decimal_digit			= $ascdigit
 @digit_sequence			= $decimal_digit+
 @decimal_literal		= ($decimal_digit # 0) @digit_sequence?
@@ -143,12 +143,15 @@ clike :-
 
 -- preprocessor
 <0> {
-	^ \#     	{cxPush cx_prepr `andAction` tk C_hash_bol}
+	^ (\# | \%\:)    	{cxPush cx_prepr `andAction` tk C_hash_bol}
 }
+
 
 <cx_prepr> {
 	\#\#     	{tk C_2hash}
 	\#     		{tk C_hash}
+	\%\:\%\:    {tk C_2hash}		-- included here, but should be acceptable everywhere?
+	\%\:     	{tk C_hash}
 }
 
 <cx_prepr> {
@@ -185,12 +188,8 @@ clike :-
 -- keywords
 alignas             / {ifLangs langsCXX}        {tk C_alignas }
 alignof             / {ifLangs langsCXX}        {tk C_alignof }
-and                 / {ifLangs langsCXX}        {tk C_and}
-and_eq              / {ifLangs langsCXX}        {tk C_and_eq}
 asm                 / {ifLangs langsCXX}        {tk C_asm}
 auto                                            {tk C_auto}
-bitand              / {ifLangs langsCXX}        {tk C_bitand}
-bitor               / {ifLangs langsCXX}        {tk C_bitor}
 bool                / {ifLangs langsCXX}        {tk C_bool}
 break                                           {tk C_break}
 case                                            {tk C_case}
@@ -199,7 +198,6 @@ char                                            {tk C_char}
 char16_t            / {ifLangs langsCXX}        {tk C_char16_t}
 char32_t            / {ifLangs langsCXX}        {tk C_char32_t}
 class               / {ifLangs langsCXX}        {tk C_class}
-compl               / {ifLangs langsCXX}        {tk C_compl}
 const                                           {tk C_const}
 const_cast          / {ifLangs langsCXX}        {tk C_const_cast}
 constexpr           / {ifLangs langsCXX}        {tk C_constexpr}
@@ -228,12 +226,8 @@ mutable             / {ifLangs langsCXX}        {tk C_mutable}
 namespace           / {ifLangs langsCXX}        {tk C_namespace}
 new                 / {ifLangs langsCXX}        {tk C_new}
 noexcept            / {ifLangs langsCXX}        {tk C_noexcept}
-not                 / {ifLangs langsCXX}        {tk C_not}
-not_eq              / {ifLangs langsCXX}        {tk C_not_eq}
 nullptr             / {ifLangs langsCXX}        {tk C_nullptr }
 operator            / {ifLangs langsCXX}        {tk C_operator}
-or                  / {ifLangs langsCXX}        {tk C_or}
-or_eq               / {ifLangs langsCXX}        {tk C_or_eq}
 private             / {ifLangs langsCXX}        {tk C_private}
 protected           / {ifLangs langsCXX}        {tk C_protected}
 public              / {ifLangs langsCXX}        {tk C_public}
@@ -266,22 +260,20 @@ void                                            {tk C_void}
 volatile                                        {tk C_volatile}
 wchar_t             / {ifLangs langsCXX}        {tk C_wchar_t}
 while                                           {tk C_while}
-xor                 / {ifLangs langsCXX}        {tk C_xor}
-xor_eq              / {ifLangs langsCXX}        {tk C_xor_eq}
 
 -- punctuation, delimiters, open/close pairs, ...
 \{			{tk C_ocurly}
+\<\%		{tk C_ocurly}
 \}			{tk C_ccurly}
+\%\>		{tk C_ccurly}
 \[			{tk C_obrack}
+\<\:		{tk C_obrack}
 \]			{tk C_cbrack}
+\:\>		{tk C_cbrack}
 \(			{tk C_oparen}
 \)			{tk C_cparen}
 \<			{tk C_oangle}
 \>			{tk C_cangle}
-\<\:		{tk C_oanglecolon}
-\:\>		{tk C_canglecolon}
-\<\%		{tk C_oangleperc}
-\%\>		{tk C_cangleperc}
 \-\>		{tk C_arrow}
 -- \.\*		{tk C_dotstar}
 \;			{tk C_semic}
@@ -327,6 +319,18 @@ xor_eq              / {ifLangs langsCXX}        {tk C_xor_eq}
 @op_unary_not	{tk C_op_unary_not}
 @op_unary_inc	{tk C_op_unary_inc}
 @op_unary_dec	{tk C_op_unary_dec}
+
+and                 / {ifLangs langsCXX}        {tk C_op_log_and}
+and_eq              / {ifLangs langsCXX}        {tk C_op_assign_and}
+bitand              / {ifLangs langsCXX}        {tk C_op_and}
+bitor               / {ifLangs langsCXX}        {tk C_op_or}
+compl               / {ifLangs langsCXX}        {tk C_tilde}
+not                 / {ifLangs langsCXX}        {tk C_op_unary_not}
+not_eq              / {ifLangs langsCXX}        {tk C_op_neq}
+or                  / {ifLangs langsCXX}        {tk C_op_log_or}
+or_eq               / {ifLangs langsCXX}        {tk C_op_assign_or}
+xor                 / {ifLangs langsCXX}        {tk C_op_xor}
+xor_eq              / {ifLangs langsCXX}        {tk C_op_assign_xor}
 
 -- identifier
 @identifier 	{tk C_name}
@@ -397,17 +401,12 @@ data TokenKind =
   -- Reserved keywords on top of shared, for: C++
   | C_alignas 
   | C_alignof 
-  | C_and
-  | C_and_eq
   | C_asm
-  | C_bitand
-  | C_bitor
   | C_bool
   | C_catch
   | C_char16_t
   | C_char32_t
   | C_class
-  | C_compl
   | C_const_cast
   | C_constexpr
   | C_decltype
@@ -421,12 +420,8 @@ data TokenKind =
   | C_namespace
   | C_new
   | C_noexcept
-  | C_not
-  | C_not_eq
   | C_nullptr 
   | C_operator
-  | C_or
-  | C_or_eq
   | C_private
   | C_protected
   | C_public
@@ -444,8 +439,6 @@ data TokenKind =
   | C_using
   | C_virtual
   | C_wchar_t
-  | C_xor
-  | C_xor_eq
 
   -- Reserved symbols
   | C_ocurly			-- {
@@ -542,7 +535,7 @@ data TokenKind =
   | C_eof
   | C_unknown               -- unrecognizable
   | C_notoken				-- nothing
-  deriving (Eq,Enum,Show)
+  deriving (Eq,Ord,Enum,Show)
 
 -- | TokenKinds for operators (excluding the ambiguous ones like *, <, ...)
 tokkindAllOp :: [TokenKind]
@@ -557,7 +550,7 @@ tokkindAllPrePr
   ++ [C_ocurly .. C_3dot]
   ++ tokkindAllOp
   ++ [C_auto .. C_while]
-  ++ [C_alignas .. C_xor_eq]
+  ++ [C_alignas .. C_wchar_t]
 
 ------------------------------------------------------------------------------------------------
 -- Position utils

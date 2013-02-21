@@ -13,10 +13,16 @@ DATA AGItf
   | AGItf               module          : Module
 
 DATA AGItfPrePr
-  | AGItf               module          : ModulePrePr
+  | AGItf               module          : PrePrL
 
 DATA AGItfExpr
   | AGItf               expr            : Expr
+
+DATA AGItfPrePrExpr
+  | AGItf               expr            : PrePrExpr
+
+DATA AGItfName
+  | AGItf               nm              : Name
 
 -------------------------------------------------------------------------------------------
 -- Top level
@@ -25,8 +31,10 @@ DATA AGItfExpr
 DATA Module
   | Mod                 decls      		: DeclL
 
+{-
 DATA ModulePrePr
   | Mod                 preprs      	: PrePrL
+-}
 
 -------------------------------------------------------------------------------------------
 -- Declarations (table, var, type)
@@ -52,8 +60,8 @@ DATA PrePr
   | Undef				nm				: Name
   
   -- choice
-  | IfThenElse			expr			: PrePrExpr
-  						toksThen		: PrePrL
+  | IfThenElse			condExpr		: PrePrExpr
+  						preprThen		: PrePrL
   						preprElse		: PrePrL
 
   -- just tokens

@@ -1,7 +1,6 @@
 init
 
-#include <aap.h>
-#include "noot.h"
+#include "test-ast1-1sub1.inp"
 
 defs
 
@@ -11,11 +10,13 @@ defs
 #define p \
         q
 
-ifs
+// #undef AAP
 
-#if defined( AAP)
-# define cl Clase
+#ifdef AAP
+YES
+#include "test-ast1-1sub2.inp"
 #else
-# define cl Klase
+NO
+#include "test-ast1-1sub3.inp"
 #endif
 

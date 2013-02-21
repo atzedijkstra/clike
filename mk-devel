@@ -8,6 +8,7 @@
 # turn these on/off to your need/liking
 cabal_cfg_opts="--cabal-lib-version=1.16.0.3"
 #cabal_clean_beforehand="cabal clean"
+#cabal_extra_local_pkgs="/Volumes/Work/Programming/uhc-utils"
 
 cd clike-lexer
 ${cabal_clean_beforehand}
@@ -17,4 +18,4 @@ cd clike-ast
 ${cabal_clean_beforehand}
 cabal configure ${cabal_cfg_opts}
 cd ..
-cabal-dev install ./clike-lexer ./clike-ast ./clike-examples
+cabal-dev install ${cabal_extra_local_pkgs} ./clike-lexer ./clike-ast ./clike-examples

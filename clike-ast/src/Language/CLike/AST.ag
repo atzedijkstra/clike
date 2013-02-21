@@ -3,7 +3,7 @@
 -------------------------------------------------------------------------------------------
 
 MODULE {Language.CLike.AST}
-    { AGItf(..), AGItfPrePr(..), AGItfExpr(..)
+    { AGItf(..), AGItfPrePr(..), AGItfExpr(..), AGItfName(..), AGItfPrePrExpr(..)
     , Decl(..), DeclL
     , PrePr(..), PrePrL
     , PrePrExpr(..)
@@ -13,23 +13,23 @@ MODULE {Language.CLike.AST}
     
     , Op
     
-    , Module(..), ModulePrePr(..)
-    , emptyModulePrePr
+    , Module(..)
 
     , module Language.CLike.Lexer
+    
+    , nmKey
+    
+    , Err
+    , mkErr
     }
 {
 import Language.CLike.Lexer(Pos, Token, TokenKind(..), LexString)
 }
 
 INCLUDE "AST/AbsSyn.ag"
+INCLUDE "AST/NameKey.ag"
 
 -- DERIVING Name : Show
-
-{
-emptyModulePrePr :: ModulePrePr
-emptyModulePrePr = ModulePrePr_Mod []
-}
 
 -------------------------------------------------------------------------------------------
 -- Operators
@@ -38,4 +38,33 @@ emptyModulePrePr = ModulePrePr_Mod []
 {
 -- | Operator is just a TokenKind
 type Op = TokenKind
+}
+
+-------------------------------------------------------------------------------------------
+-- Key of a Name, available on Haskell level
+-------------------------------------------------------------------------------------------
+
+WRAPPER AGItfName
+
+{
+-- | Get the key used to access Env info
+nmKey :: Name -> LexString
+nmKey e
+  = (maybe "??" id $ mbKey_Syn_AGItfName r)
+  where r = wrap_AGItfName
+              (sem_AGItfName (AGItfName_AGItf e))
+              (Inh_AGItfName {})
+}
+
+-------------------------------------------------------------------------------------------
+-- Error
+-------------------------------------------------------------------------------------------
+
+{
+-- | Error is (for now) just a string
+type Err = String
+
+-- | Combine error msg and position
+mkErr :: Pos -> String -> [Err]
+mkErr p s = [s ++ " (" ++ show p ++ ")"]
 }

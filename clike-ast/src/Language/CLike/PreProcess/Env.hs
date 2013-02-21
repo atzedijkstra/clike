@@ -10,12 +10,14 @@ module Language.CLike.PreProcess.Env
   , Env
   
   , insert
+  , delete
   , lookup
   , empty
   ) where
 
 -------------------------------------------------------------------------------------------
 import           Prelude hiding(lookup)
+import qualified Data.Map as Map
 -------------------------------------------------------------------------------------------
 import           UHC.Util.ScopeMapGam
 import           UHC.Util.VarMp			-- only for MetaLev etc, to be removed with uhc-util > 0.1.1
@@ -45,13 +47,20 @@ emptyNmInfo = NmInfo
 type EnvKey = LexString
 
 -- | Environment
-type Env = SGam EnvKey NmInfo
+-- type Env = SGam EnvKey NmInfo
+type Env = Map.Map EnvKey NmInfo
 
 -- | Insert
-insert n i g = sgamSingleton n i `sgamUnion` g
+-- insert n i g = sgamSingleton n i `sgamUnion` g
+insert = Map.insert
+
+-- | Delete
+delete = Map.delete
 
 -- | Lookup
-lookup n g = fmap head $ sgamLookupMetaLevDup metaLevVal n g
+-- lookup n g = fmap head $ sgamLookupMetaLevDup metaLevVal n g
+lookup = Map.lookup
 
 -- | Empty
-empty = emptySGam
+-- empty = emptySGam
+empty = Map.empty

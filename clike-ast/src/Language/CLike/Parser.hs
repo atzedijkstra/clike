@@ -10,24 +10,32 @@
 
 module Language.CLike.Parser
   ( pModule
-  , pModulePrePr
+  , pPrePrL
 
-  , run
-  , runPrePr
-  , runExpr
+  , parseModule
+
+  , parseExpr
+  
+  , parsePrePr
+  , parsePrePrFile
+  , parsePrePrFileAndReport
   )
   where
 
-import Control.Monad
-import Data.Maybe
+-------------------------------------------------------------------------------------------
+import           Control.Monad
+import           System.IO
+import           Data.Maybe
+import qualified Data.Set as Set
 
-import Text.ParserCombinators.UU
-import Text.ParserCombinators.UU.BasicInstances
--- import Text.ParserCombinators.UU.Utils
--- import Text.ParserCombinators.UU.Demo.Examples as D
-
-import Language.CLike.AST
-import Language.CLike.Lexer
+import           Text.ParserCombinators.UU
+import           Text.ParserCombinators.UU.BasicInstances
+-- import           Text.ParserCombinators.UU.Utils
+-- import           Text.ParserCombinators.UU.Demo.Examples as D
+-------------------------------------------------------------------------------------------
+import           Language.CLike.AST
+import           Language.CLike.Lexer
+-------------------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------------------
 -- Parser interface
@@ -66,8 +74,8 @@ type Tokens = Str Token [Token] Pos
 type CP a = P Tokens a
 
 -- | Rudimentary running
-run :: String -> IO ()
-run inp = do
+parseModule :: String -> IO ()
+parseModule inp = do
   case scanner ( -- scfgAddOpts [ScOpt_CommentAs1Token] $
                  scannerConfigCXX
                ) 0 inp of
@@ -76,23 +84,37 @@ run inp = do
                         = parse ((,) <$> pModule <*> pEnd) (createStr noPos t)
                   forM_ errors (putStrLn . show)
 
--- | Rudimentary running of preprocessor
-runPrePr :: String -> IO ModulePrePr
-runPrePr inp = do
+-- Run preprocessor parser on string
+parsePrePr :: String -> Either [String] [PrePr]
+parsePrePr inp = do
   case scanner ( -- scfgAddOpts [ScOpt_CommentAs1Token] $
                  scannerConfigCXX
                ) 0 inp of
-    Left  m -> do putStrLn m
-                  return emptyModulePrePr
-    Right t -> do let r@(m, errors)
-                        = parse ((,) <$> pModulePrePr <*> pEnd) (createStr noPos t)
-                  forM_ errors (putStrLn . show)
-                  return m
+    Left  m -> Left [m]
+    Right t -> case parse ((,) <$> pPrePrL <*> pEnd) (createStr noPos t) of
+                 (m, []) -> Right m
+                 (_, es) -> Left $ map show es
+
+-- Run preprocessor parser on file
+parsePrePrFile :: FilePath -> IO (Either [String] [PrePr])
+parsePrePrFile f = do
+  h <- openFile f ReadMode
+  s <- hGetContents h
+  return $ parsePrePr s
+
+-- Run preprocessor parser on file
+parsePrePrFileAndReport :: FilePath -> IO [PrePr]
+parsePrePrFileAndReport f = do
+  res <- parsePrePrFile f
+  case res of
+    Left msgs -> do forM_ msgs putStrLn
+                    return []
+    Right r   -> return r
 
 -- | Run Expr parser through Tokens
-runExpr :: [Token] -> Either String Expr
-runExpr t | null errors = Right e
-          | otherwise   = Left $ unlines $ map show errors
+parseExpr :: [Token] -> Either String Expr
+parseExpr t | null errors = Right e
+            | otherwise   = Left $ unlines $ map show errors
   where r@(e, errors) = parse ((,) <$> pExpr <*> pEnd) (createStr noPos t)
 
 
@@ -119,6 +141,21 @@ pTkO tk = (\t -> (tokPos t, tokKind t)) <$> pTkRaw tk
 -- | Token parser, only string info
 pTkS :: TokenKind -> CP LexString
 pTkS tk = snd <$> pTk tk
+
+-- | Set of tokens, returning the raw token
+pSatToksRaw :: [TokenKind] -> CP Token
+pSatToksRaw [t] = pTkRaw t
+pSatToksRaw tl  = pSatisfy (\t -> Set.member (tokKind t) ts) ins
+  where ts  = Set.fromList tl
+        ins = Insertion "pSatToksRaw" (mkToken (head tl)) 5
+
+-- | Set of tokens, Op specific
+pSatToksO :: [TokenKind] -> CP (Pos,Op)
+pSatToksO tl = (\t -> (tokPos t, tokKind t)) <$> pSatToksRaw tl
+
+-- | Set of tokens, pos + string
+pSatToks :: [TokenKind] -> CP PosString
+pSatToks tl = (\t -> (tokPos t, tokPayload t)) <$> pSatToksRaw tl
 
 -------------------------------------------------------------------------------------------
 -- Utility parsers
@@ -151,7 +188,7 @@ p1 <+> p2 = (,) <$> p1 <*> p2
 
 -- | Make infix op parser, also providing the chaining variant
 mkInfP' :: (CP (Expr -> Expr -> Expr) -> CP Expr -> CP Expr) -> [TokenKind] -> CP Expr -> CP Expr
-mkInfP' chn tks p = chn (uncurry Expr_OpInfix <$> pAny pTkO tks) p
+mkInfP' chn tks p = chn (uncurry Expr_OpInfix <$> pSatToksO tks) p
 
 -- | Make infix op parser, defaulting to right associative
 mkInfP :: [TokenKind] -> CP Expr -> CP Expr
@@ -192,11 +229,11 @@ posStringConcat (p1,s1) (_,s2) = (p1,s1++s2)
 -------------------------------------------------------------------------------------------
 
 pModule :: CP Module
-pModulePrePr :: CP ModulePrePr
+pPrePrL :: CP [PrePr]
 pExpr :: CP Expr
-(pModule,pModulePrePr,pExpr)
+(pModule,pPrePrL,pExpr)
   = ( Module_Mod <$> pure []
-    , ModulePrePr_Mod <$> pPrePrL
+    , pPrePrL
     , pExpr
     )
   where 
@@ -256,11 +293,11 @@ pExpr :: CP Expr
     pIdOperator :: CP Name
     pIdOperator
       = uncurry Name_Op
-        <$> (   pAny pTk tokkindAllOp
-            <|> pAny pTk [C_star, C_tilde, C_oangle, C_cangle, C_arrow]
+        <$> (   pSatToks tokkindAllOp
+            <|> pSatToks [C_star, C_tilde, C_oangle, C_cangle, C_arrow]
             <|> posStringConcat <$> pTk C_oparen <*> pTk C_cparen
             <|> pOCBrack
-            <|> posStringConcat <$> pAny pTk [C_new, C_delete] <*> (pOCBrack `opt` noPosString)
+            <|> posStringConcat <$> pSatToks [C_new, C_delete] <*> (pOCBrack `opt` noPosString)
             )
       where pOCBrack = posStringConcat <$> pTk C_obrack <*> pTk C_cbrack
 
@@ -336,7 +373,7 @@ pExpr :: CP Expr
           <**> (   pure id
                <|> (\t e c -> unPos Expr_IfThenElse c t e) <$ pTk C_quest <*> pExpr <* pTk C_colon <*> pExprAssign
                <|> (\(p,o) r l -> Expr_OpInfix p o l r)
-                   <$> pAny pTkO [C_op_assign, C_op_assign_add, C_op_assign_sub, C_op_assign_mul, C_op_assign_div, C_op_assign_mod, C_op_assign_xor, C_op_assign_and, C_op_assign_or, C_op_assign_shl, C_op_assign_shr]
+                   <$> pSatToksO [C_op_assign, C_op_assign_add, C_op_assign_sub, C_op_assign_mul, C_op_assign_div, C_op_assign_mod, C_op_assign_xor, C_op_assign_and, C_op_assign_or, C_op_assign_shl, C_op_assign_shr]
                    <*> pExprInitializerClause
                )
 
@@ -391,7 +428,7 @@ pExpr :: CP Expr
             pElse  = pCtrlLine (pTkP C_hash_else               ) <+> pPrePrL
             pEndif = pCtrlLine (pTkP C_hash_endif)
             --
-            pPrePrTok = pAny pTkRaw tokkindAllPrePr
+            pPrePrTok = pSatToksRaw tokkindAllPrePr
             pCtrlLine = pPacked (pTk C_hash_bol) (pTk C_hash_eol)
             pPrePrExpr = unPos PrePrExpr_Expr <$> pExpr
             mkIf p c t e = PrePr_IfThenElse p c t e
