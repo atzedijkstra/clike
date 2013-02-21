@@ -40,10 +40,12 @@ parsePrePrOpts
 
 parsePrePrOpts :: Parser (PrePrOpts -> PrePrOpts)
 parsePrePrOpts
-  =   (\o1 -> o1)
-  <$> setBy ppoptsIncludePath (\md p -> maybe p (\d -> p++[d]) md) strOption
+  =   (\o1 -> foldr (.) id
+       [o1]
+      )
+  <$> set ppoptsIncludePath (\d p -> p++[d]) strOption
         (  short 'I'
-        <> metavar "DIRECTORY"
-        <> help "Directory for searching include files"
+        <> metavar "DIR"
+        <> help "Use DIR for searching include files"
         )
-  where setBy fld upd optkind opts = (\v -> fld ^%= upd v) <$> (optional $ optkind opts)
+  where set fld upd optkind opts = (\v -> fld ^%= maybe id upd v) <$> (optional $ optkind opts)
